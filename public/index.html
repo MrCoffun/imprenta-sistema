@@ -1,0 +1,2407 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Gestión de Órdenes de Trabajo</title>
+
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+
+<body>
+
+    <div id="loginView" class="login-view">
+
+    <div class="login-card">
+
+        <div class="logo">
+            <h1>IMPRENTA</h1>
+            <span>Gestión de OT</span>
+        </div>
+
+        <h2>Iniciar sesión</h2>
+
+        <p>Ingresa tus credenciales para acceder al sistema.</p>
+
+        <form id="formLogin">
+
+            <div class="form-group">
+                <label for="loginUsuario">
+                    Usuario
+                </label>
+
+                <input
+                    type="text"
+                    id="loginUsuario"
+                    autocomplete="username"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="loginContrasena">
+                    Contraseña
+                </label>
+
+                <input
+                    type="password"
+                    id="loginContrasena"
+                    autocomplete="current-password"
+                    required
+                >
+            </div>
+
+            <p id="loginError" class="login-error"></p>
+
+            <button
+                type="submit"
+                class="primary-button">
+                Iniciar sesión
+            </button>
+
+        </form>
+
+    </div>
+
+</div>
+
+<div class="app" id="appSistema">
+
+    <!-- =========================
+         SIDEBAR
+    ========================== -->
+
+    <aside class="sidebar">
+
+        <div class="logo">
+            <h1>IMPRENTA</h1>
+            <span>Gestión de OT</span>
+        </div>
+
+        <nav class="menu">
+
+    <button class="menu-item active" data-view="dashboard">
+        <span>🏠</span>
+        Dashboard
+    </button>
+
+    <!-- COTIZACIONES -->
+
+<div class="menu-group">
+
+    <button
+        class="menu-item"
+        id="btnMenuCotizaciones"
+        type="button">
+
+        <span>📋</span>
+        Cotizaciones
+        <span class="menu-arrow">▾</span>
+
+    </button>
+
+    <div
+        id="submenuCotizaciones"
+        class="submenu">
+
+        <button
+            class="submenu-item"
+            data-view="nueva-cotizacion">
+            ➕ Crear cotización
+        </button>
+
+        <button
+            class="submenu-item"
+            data-view="cotizaciones-diseno">
+            🎨 Pendientes de diseñador
+        </button>
+
+        <button
+            class="submenu-item"
+            data-view="cotizaciones-aprobacion">
+            📝 Pendientes de aprobación
+        </button>
+
+        <button
+            class="submenu-item"
+            data-view="historial-aprobadas">
+            ✅ Cotizaciones Aprobadas
+        </button>
+
+        <button
+            class="submenu-item"
+            data-view="historial-rechazadas">
+            ❌ Cotizaciones Rechazadas
+        </button>
+
+    </div>
+
+</div>
+
+    <button class="menu-item" data-view="clientes">
+        <span>👥</span>
+        Clientes
+    </button>
+
+            <!-- ÓRDENES DE TRABAJO -->
+
+        <div class="menu-group">
+
+            <button
+                class="menu-item"
+                id="btnMenuOrdenes"
+                type="button">
+
+                <span>🏭</span>
+                Órdenes de Trabajo
+                <span class="menu-arrow">▾</span>
+
+            </button>
+
+
+            <div
+                id="submenuOrdenes"
+                class="submenu">
+
+                <button
+                    class="submenu-item submenu-ordenes-item"
+                    data-view="ordenes-activas">
+
+                    📂 Activas
+
+                </button>
+
+                <button
+                    class="submenu-item submenu-ordenes-item"
+                    data-view="ordenes-historial-maquinista"
+                    id="btnHistorialMaquinista">
+
+                    📜 Historial de mis trabajos
+
+                </button>
+
+                <button
+                    class="submenu-item submenu-ordenes-item"
+                    data-view="ordenes-historial-disenador"
+                    id="btnHistorialDisenador">
+
+                    📜 Historial de mis trabajos
+
+                </button>
+
+
+                <button
+                    class="submenu-item submenu-ordenes-item"
+                    data-view="ordenes-revision">
+
+                    🔔 En revisión
+
+                    <span
+                        id="contadorOTRevision"
+                        class="menu-notification"
+                        style="display: none;">
+                        0
+                    </span>
+
+                </button>
+
+
+                <button
+                    class="submenu-item submenu-ordenes-item"
+                    data-view="ordenes-historial">
+
+                    📜 Historial
+
+                </button>
+
+            </div>
+
+        </div>
+
+    <button class="menu-item" data-view="cotizar-mano-obra" id="btnCotizarManoObra">
+
+    <span>🎨</span>
+    Cotizar mano de obra
+
+    </button>
+
+</nav>
+
+        <div class="sidebar-footer">
+            <span>Sistema Web</span>
+            <small>Versión Alpha</small>
+        </div>
+
+    </aside>
+
+
+    <!-- =========================
+         CONTENIDO PRINCIPAL
+    ========================== -->
+
+    <main class="main">
+
+        <header class="topbar">
+
+            <div>
+                <h2 id="pageTitle">Dashboard</h2>
+
+                <p id="pageDescription">
+                    Gestión y seguimiento de órdenes de trabajo
+                </p>
+            </div>
+
+            <div class="user-info">
+
+                <span>👤</span>
+
+                <div>
+                    <strong id="usuarioNombre">Usuario</strong>
+                        <small id="usuarioRol">Rol</small>
+                </div>
+                <button
+                    type="button"
+                    class="secondary-button"
+                    id="btnCerrarSesion">
+                    Cerrar sesión
+                </button>
+            </div>
+
+        </header>
+
+
+        <section class="content">
+
+
+            <!-- =========================
+                 DASHBOARD
+            ========================== -->
+
+            <div id="view-dashboard">
+
+                <div class="cards">
+
+                    <div class="card">
+                        <div class="card-icon">📋</div>
+
+                        <div>
+                            <span>Cotizaciones</span>
+                            <strong id="totalCotizaciones">0</strong>
+                        </div>
+                    </div>
+
+
+                    <div class="card">
+                        <div class="card-icon">🏭</div>
+
+                        <div>
+                            <span>Órdenes de Trabajo</span>
+                            <strong id="totalOT">0</strong>
+                        </div>
+                    </div>
+
+
+                    <div class="card">
+                        <div class="card-icon">⚠️</div>
+
+                        <div>
+                            <span>Prioritarias</span>
+                            <strong id="totalPrioritarias">0</strong>
+                        </div>
+                    </div>
+
+
+                    <div class="card">
+                        <div class="card-icon">🔴</div>
+
+                        <div>
+                            <span>Retrasadas</span>
+                            <strong id="totalRetrasadas">0</strong>
+                        </div>
+                    </div>
+
+                </div>
+
+
+                <section class="welcome">
+
+                    <div>
+
+                        <span class="section-label">
+                            SISTEMA DE GESTIÓN
+                        </span>
+
+                        <h3>
+                            Gestión y seguimiento de
+                            <span>Órdenes de Trabajo</span>
+                        </h3>
+
+                        <p>
+                            Desde este sistema podrás gestionar cotizaciones,
+                            órdenes de trabajo, diseños, impresiones y el
+                            historial de cada OT.
+                        </p>
+
+                    </div>
+
+                </section>
+
+
+                <section class="panel">
+
+                    <div class="panel-header">
+
+                        <div>
+
+                            <h3>Estado del sistema</h3>
+
+                            <p>
+                                Información general de la operación
+                            </p>
+
+                        </div>
+
+                    </div>
+
+
+                    <div class="system-status">
+
+                        <div class="status-item">
+
+                            <span class="status-dot"></span>
+
+                            <div>
+                                <strong>Backend</strong>
+                                <small>Conectado</small>
+                            </div>
+
+                        </div>
+
+
+                        <div class="status-item">
+
+                            <span class="status-dot"></span>
+
+                            <div>
+                                <strong>Base de datos</strong>
+                                <small>SQLite funcionando</small>
+                            </div>
+
+                        </div>
+
+
+                        <div class="status-item">
+
+                            <span class="status-dot"></span>
+
+                            <div>
+                                <strong>API</strong>
+                                <small>Express funcionando</small>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+            </div>
+
+
+            <!-- =========================
+                 COTIZACIONES
+            ========================== -->
+
+            <div id="view-cotizaciones" class="view-hidden">
+
+                <section class="panel">
+
+                    <div class="panel-header panel-header-actions">
+
+                        <div>
+
+                            <h3>Cotizaciones</h3>
+
+                            <p>
+                                Gestión de cotizaciones registradas
+                            </p>
+
+                        </div>
+
+                        <button
+                            class="primary-button"
+                            id="btnNuevaCotizacion">
+
+                            + Nueva cotización
+
+                        </button>
+
+                    </div>
+
+
+                    <div class="table-container">
+
+                        <table>
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>Código</th>
+                                    <th>Cliente</th>
+                                    <th>Producto</th>
+                                    <th>Cantidad</th>
+                                    <th>Fecha requerida</th>
+                                    <th>Estado</th>
+                                    <th>Acciones</th>
+
+                                </tr>
+
+                            </thead>
+
+                            <tbody id="tablaCotizaciones">
+
+                                <tr>
+
+                                    <td colspan="7">
+                                        Cargando cotizaciones...
+                                    </td>
+
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+                            <div
+                        id="paginacionCotizaciones"
+                        class="pagination">
+                    </div>
+                    </div>
+                    
+                </section>
+
+            </div>
+
+            <!-- ==========================================
+                    COTIZACIONES - PENDIENTES DE DISEÑADOR
+                ========================================== -->
+
+            <div id="view-cotizaciones-diseno"
+                class="view-hidden">
+
+                <section class="panel">
+
+                    <div class="panel-header">
+
+                        <div>
+                            <h3>Pendientes de diseñador</h3>
+
+                            <p>
+                                Cotizaciones pendientes de evaluación de mano de obra de diseño
+                            </p>
+                        </div>
+
+                    </div>
+
+                    <div class="table-container">
+
+                        <table>
+
+                            <thead>
+
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Cliente</th>
+                                    <th>Producto</th>
+                                    <th>Cantidad</th>
+                                    <th>Costo producción</th>
+                                    <th>Fecha requerida</th>
+                                    <th>Estado</th>
+                                </tr>
+
+                            </thead>
+
+                            <tbody id="tablaCotizacionesDisenoCotizador">
+
+                                <tr>
+                                    <td colspan="7">
+                                        Cargando cotizaciones...
+                                    </td>
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </section>
+
+            </div>
+
+
+            <!-- ==========================================
+                COTIZACIONES - PENDIENTES DE APROBACIÓN
+            ========================================== -->
+
+            <div id="view-cotizaciones-aprobacion"
+                class="view-hidden">
+
+                <section class="panel">
+
+                    <div class="panel-header">
+
+                        <div>
+                            <h3>Pendientes de aprobación</h3>
+
+                            <p>
+                                Cotizaciones con propuesta de mano de obra lista para revisión
+                            </p>
+                        </div>
+
+                    </div>
+
+                    <div class="table-container">
+
+                        <table>
+
+                            <thead>
+
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Cliente</th>
+                                    <th>Producto</th>
+                                    <th>Costo producción</th>
+                                    <th>Mano de obra</th>
+                                    <th>Total</th>
+                                    <th>Acciones</th>
+                                </tr>
+
+                            </thead>
+
+                            <tbody id="tablaCotizacionesAprobacion">
+
+                                <tr>
+                                    <td colspan="7">
+                                        Cargando cotizaciones...
+                                    </td>
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                </section>
+
+            </div>
+
+
+            <!-- ==========================================
+                    HISTORIAL - APROBADAS
+                ========================================== -->
+
+                <div id="view-historial-aprobadas"
+                    class="view-hidden">
+
+                    <section class="panel">
+
+                        <div class="panel-header">
+
+                            <div>
+                                <h3>Cotizaciones aprobadas</h3>
+
+                                <p>
+                                    Cotizaciones aceptadas que pueden generar una orden de trabajo
+                                </p>
+                            </div>
+
+                        </div>
+
+                        <div class="table-container">
+
+                            <table>
+
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Cliente</th>
+                                        <th>Producto</th>
+                                        <th>Cantidad</th>
+                                        <th>Total</th>
+                                        <th>Estado</th>
+                                        <th>Actualización</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody id="tablaHistorialAprobadas">
+
+                                    <tr>
+                                        <td colspan="8">
+                                            Cargando cotizaciones...
+                                        </td>
+                                    </tr>
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </section>
+
+                </div>
+
+
+                <!-- ==========================================
+                    HISTORIAL - RECHAZADAS
+                ========================================== -->
+
+                <div id="view-historial-rechazadas"
+                    class="view-hidden">
+
+                    <section class="panel">
+
+                        <div class="panel-header">
+
+                            <div>
+                                <h3>Cotizaciones rechazadas</h3>
+
+                                <p>
+                                    Cotizaciones que no fueron aceptadas por el cliente
+                                </p>
+                            </div>
+
+                        </div>
+
+                        <div class="table-container">
+
+                            <table>
+
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Cliente</th>
+                                        <th>Producto</th>
+                                        <th>Cantidad</th>
+                                        <th>Total</th>
+                                        <th>Estado</th>
+                                        <th>Actualización</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody id="tablaHistorialRechazadas">
+
+                                    <tr>
+                                        <td colspan="8">
+                                            Cargando cotizaciones...
+                                        </td>
+                                    </tr>
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </section>
+
+                </div>
+
+            <!-- ==========================================
+                DETALLE DE COTIZACIÓN
+                ========================================== -->
+
+            <div id="view-detalle-cotizacion" class="view-hidden">
+
+                <section class="panel">
+
+                    <div class="panel-header panel-header-actions">
+
+                        <div>
+                            <h3 id="detalleCotizacionTitulo">
+                                Detalle de cotización
+                            </h3>
+
+                            <p>
+                                Información completa de la cotización
+                            </p>
+                        </div>
+
+                        <button
+                            class="secondary-button"
+                            id="btnVolverCotizaciones">
+
+                            ← Volver
+
+                        </button>
+
+                    </div>
+
+
+                    <!-- INFORMACIÓN GENERAL -->
+
+                    <div class="panel">
+
+                        <h4>Información general</h4>
+
+                        <div class="form-grid">
+
+                            <div class="form-group">
+                                <label>Código</label>
+                                <strong id="detalleCotizacionCodigo">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Estado</label>
+                                <strong id="detalleCotizacionEstado">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Cliente</label>
+                                <strong id="detalleCotizacionCliente">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Teléfono</label>
+                                <strong id="detalleCotizacionTelefono">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Correo</label>
+                                <strong id="detalleCotizacionCorreo">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Cotizador</label>
+                                <strong id="detalleCotizacionUsuario">—</strong>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- CARACTERÍSTICAS DEL PRODUCTO -->
+
+                    <div class="panel">
+
+                        <h4>Características del producto</h4>
+
+                        <div class="form-grid">
+
+                            <div class="form-group">
+                                <label>Tipo de producto</label>
+                                <strong id="detalleCotizacionProducto">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Tamaño</label>
+                                <strong id="detalleCotizacionTamano">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Material</label>
+                                <strong id="detalleCotizacionMaterial">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Tipo de impresión</label>
+                                <strong id="detalleCotizacionImpresion">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Caras</label>
+                                <strong id="detalleCotizacionCaras">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Acabado</label>
+                                <strong id="detalleCotizacionAcabado">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Sangrado</label>
+                                <strong id="detalleCotizacionSangrado">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Cantidad</label>
+                                <strong id="detalleCotizacionCantidad">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Fecha requerida</label>
+                                <strong id="detalleCotizacionFecha">—</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Hora requerida</label>
+                                <strong id="detalleCotizacionHora">—</strong>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- OBSERVACIONES -->
+
+                    <div class="panel">
+
+                        <h4>Observaciones</h4>
+
+                        <p id="detalleCotizacionObservaciones">
+                            —
+                        </p>
+
+                    </div>
+
+
+                    <!-- COSTOS -->
+
+                    <div class="panel">
+
+                        <h4>Detalle económico</h4>
+
+                        <div class="form-grid">
+
+                            <div class="form-group">
+                                <label>Precio por millar</label>
+                                <strong id="detalleCotizacionPrecio">S/ 0.00</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Cantidad de millares</label>
+                                <strong id="detalleCotizacionMillares">0</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Costo de producción</label>
+                                <strong id="detalleCotizacionProduccion">S/ 0.00</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Mano de obra de diseño</label>
+                                <strong id="detalleCotizacionDiseño">S/ 0.00</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Total</label>
+                                <strong id="detalleCotizacionTotal">S/ 0.00</strong>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Evaluación del costo</label>
+                                <strong id="detalleCotizacionEvaluacion">—</strong>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+            </div>
+
+            <!-- =========================
+                FORMULARIO NUEVA COTIZACIÓN
+                ========================== -->
+
+            <div id="view-nueva-cotizacion" class="view-hidden">
+
+                <section class="panel">
+
+                    <div class="panel-header panel-header-actions">
+
+                        <div>
+
+                            <h3>Nueva cotización</h3>
+
+                            <p>
+                                Registrar una nueva solicitud de cotización
+                            </p>
+
+                        </div>
+
+                        <button
+                            type="button"
+                            class="secondary-button"
+                            id="btnCancelarCotizacion">
+
+                            ← Volver
+
+                        </button>
+
+                    </div>
+
+
+                    <form id="formNuevaCotizacion">
+
+                        <!-- =========================
+                                DATOS DEL CLIENTE
+                            ========================== -->
+
+                        <div class="form-group buscador-cliente">
+
+                <label for="cotizacionClienteBusqueda">
+                    Buscar cliente
+                </label>
+
+                <div class="contenedor-buscador-cliente">
+
+                    <input
+                        type="text"
+                        id="cotizacionClienteBusqueda"
+                        placeholder="Escribe el nombre del cliente"
+                        autocomplete="off">
+
+                    <div
+                        id="resultadosBusquedaClientes"
+                        class="resultados-clientes">
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="cotizacionClienteNombre">
+                    Nombre del cliente
+                </label>
+
+                <input
+                    type="text"
+                    id="cotizacionClienteNombre"
+                    readonly>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="cotizacionClienteTelefono">
+                    Teléfono
+                </label>
+
+                <input
+                    type="tel"
+                    id="cotizacionClienteTelefono"
+                    readonly>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="cotizacionClienteCorreo">
+                    Correo electrónico
+                </label>
+
+                <input
+                    type="email"
+                    id="cotizacionClienteCorreo"
+                    readonly>
+
+            </div>
+
+
+            <!-- ID del cliente seleccionado -->
+            <input
+                type="hidden"
+                id="cotizacionIdCliente">
+
+
+            <!-- =========================
+                 PRODUCTO
+            ========================== -->
+
+                    <div class="form-group">
+            <label for="cotizacionProducto">Tipo de producto</label>
+            <select id="cotizacionProducto" required>
+                <option value="">Seleccionar producto</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="cotizacionTamano">Tamaño</label>
+            <select id="cotizacionTamano" required disabled>
+                <option value="">Seleccionar tamaño</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="cotizacionMaterial">Material</label>
+            <select id="cotizacionMaterial" required disabled>
+                <option value="">Seleccionar material</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="cotizacionImpresion">Tipo de impresión</label>
+            <select id="cotizacionImpresion" required disabled>
+                <option value="">Seleccionar impresión</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="cotizacionCaras">Caras</label>
+            <select id="cotizacionCaras" required disabled>
+                <option value="">Seleccionar caras</option>
+            </select>
+        </div>
+
+
+            <div class="form-group">
+
+                <label for="cotizacionAcabado">
+                    Acabado
+                </label>
+
+                <input
+                    type="text"
+                    id="cotizacionAcabado"
+                    placeholder="Ej. Sin acabado">
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="cotizacionSangrado">
+                    Sangrado
+                </label>
+
+                <input
+                    type="text"
+                    id="cotizacionSangrado"
+                    placeholder="Ej. 3 mm">
+
+            </div>
+
+
+            <!-- =========================
+                 CANTIDAD
+            ========================== -->
+
+                    <div class="form-group">
+            <label for="cotizacionCantidad">Cantidad</label>
+            <select id="cotizacionCantidad" required>
+                <option value="">Seleccionar cantidad</option>
+                <option value="1000">1,000 unidades</option>
+                <option value="2000">2,000 unidades</option>
+                <option value="3000">3,000 unidades</option>
+                <option value="4000">4,000 unidades</option>
+                <option value="5000">5,000 unidades</option>
+            </select>
+        </div>
+
+        <div class="form-group form-group-full">
+    <div id="resumenTarifaCotizacion" class="panel">
+        <strong>Tarifa de producción</strong>
+
+        <p id="tarifaDescripcion">
+            Selecciona las características del producto para consultar la tarifa.
+        </p>
+
+        <p>
+            Precio por millar:
+            <strong id="tarifaPrecio">S/ 0.00</strong>
+        </p>
+
+        <p>
+            Cantidad de millares:
+            <strong id="tarifaMillares">0</strong>
+        </p>
+
+        <p>
+            Costo de producción:
+            <strong id="tarifaCostoProduccion">S/ 0.00</strong>
+        </p>
+    </div>
+</div>
+
+
+            <!-- =========================
+                 FECHA
+            ========================== -->
+
+            <div class="form-group">
+
+                <label for="cotizacionFecha">
+                    Fecha requerida
+                </label>
+
+                <input
+                    type="date"
+                    id="cotizacionFecha"
+                    required>
+
+            </div>
+
+
+            <!-- =========================
+                 HORA
+            ========================== -->
+
+            <div class="form-group">
+
+                <label for="cotizacionHora">
+                    Hora requerida
+                </label>
+
+                <input
+                    type="time"
+                    id="cotizacionHora"
+                    required>
+
+            </div>
+
+
+            <!-- =========================
+                 OBSERVACIONES
+            ========================== -->
+
+            <div class="form-group form-group-full">
+
+                <label for="cotizacionObservaciones">
+                    Observaciones
+                </label>
+
+                <textarea
+                    id="cotizacionObservaciones"
+                    placeholder="Observaciones adicionales"></textarea>
+
+            </div>
+
+
+            <!-- =========================
+                 ACCIONES
+            ========================== -->
+
+            <div class="form-actions">
+
+                <button
+                    type="button"
+                    class="secondary-button"
+                    id="btnCancelarCotizacionForm">
+
+                    Cancelar
+
+                </button>
+
+
+                <button
+                    type="submit"
+                    class="primary-button">
+
+                    Guardar cotización
+
+                </button>
+
+            </div>
+
+        </form>
+
+    </section>
+
+            </div>
+            <!-- =========================
+                CLIENTES
+            ========================== -->
+
+            <div id="view-clientes" class="view-hidden">
+
+                <section class="panel">
+
+                    <div class="panel-header panel-header-actions">
+
+                        <div>
+
+                            <h3>Clientes</h3>
+
+                            <p>
+                                Gestión de clientes registrados
+                            </p>
+
+                        </div>
+
+                        <button
+                            class="primary-button"
+                            id="btnNuevoCliente">
+
+                            + Nuevo cliente
+
+                        </button>
+
+                    </div>
+
+
+                    <div class="table-container">
+
+                        <table>
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>Nombre</th>
+                                    <th>Teléfono</th>
+                                    <th>Correo</th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody id="tablaClientes">
+
+                                <tr>
+
+                                    <td colspan="3">
+                                        Cargando clientes...
+                                    </td>
+
+                                </tr>
+
+                            </tbody>
+                            
+
+                        </table>
+                            <div
+                                id="paginacionClientes"
+                                class="pagination">
+                            </div>
+                        </div>
+                </section>
+
+            </div>
+
+            <!-- =========================
+                NUEVO CLIENTE
+            ========================== -->
+
+            <div id="view-nuevo-cliente" class="view-hidden">
+
+                <section class="panel">
+
+                    <div class="panel-header">
+
+                        <div>
+
+                            <h3>Nuevo cliente</h3>
+
+                            <p>
+                                Registrar un nuevo cliente
+                            </p>
+
+                        </div>
+
+                    </div>
+
+
+                    <form id="formNuevoCliente">
+
+                        <div class="form-group">
+
+                            <label for="nuevoClienteNombre">
+                                Nombre del cliente
+                            </label>
+
+                            <input
+                                type="text"
+                                id="nuevoClienteNombre"
+                                placeholder="Ej. Juan Pérez"
+                                required>
+
+                        </div>
+
+
+                        <div class="form-group">
+
+                            <label for="nuevoClienteTelefono">
+                                Teléfono
+                            </label>
+
+                            <input
+                                type="tel"
+                                id="nuevoClienteTelefono"
+                                placeholder="Ej. 987654321"
+                                maxlength="9"
+                                required>
+
+                        </div>
+
+
+                        <div class="form-group">
+
+                            <label for="nuevoClienteCorreo">
+                                Correo electrónico
+                            </label>
+
+                            <input
+                                type="email"
+                                id="nuevoClienteCorreo"
+                                placeholder="Ej. cliente@correo.com"
+                                required>
+
+                        </div>
+
+
+                        <div class="panel-header-actions">
+
+                            <button
+                                type="button"
+                                class="secondary-button"
+                                id="btnCancelarNuevoCliente">
+
+                                Cancelar
+
+                            </button>
+
+
+                            <button
+                                type="submit"
+                                class="primary-button">
+
+                                Guardar cliente
+
+                            </button>
+
+                        </div>
+
+                    </form>
+
+                </section>
+
+            </div>
+        
+            <!-- =========================
+                ORDENES DE TRABAJO ACTIVAS
+                ========================== -->
+
+                <div id="view-ordenes" class="view-hidden">
+
+                    <section class="panel">
+
+                        <div class="panel-header">
+
+                            <div>
+
+                                <h3>Órdenes de Trabajo Activas</h3>
+
+                                <p>
+                                    Órdenes que se encuentran actualmente en proceso
+                                </p>
+
+                            </div>
+
+                        </div>
+
+
+                        <!-- FILTROS -->
+
+                        <div class="filters-container">
+
+                            <div class="filter-group">
+
+                                <label for="filtroEstadoOT">
+                                    Estado
+                                </label>
+
+                                <select id="filtroEstadoOT">
+
+                                    <option value="">
+                                        Todos los estados
+                                    </option>
+
+                                    <option value="Pendiente">
+                                        Pendiente
+                                    </option>
+
+                                    <option value="En Diseño">
+                                        En Diseño
+                                    </option>
+
+                                    <option value="En Impresión">
+                                        En Impresión
+                                    </option>
+
+                                    
+                                </select>
+
+                            </div>
+
+
+                            <div class="filter-group">
+
+                                <label for="filtroPrioridadOT">
+                                    Prioridad
+                                </label>
+
+                                <select id="filtroPrioridadOT">
+
+                                    <option value="">
+                                        Todas las prioridades
+                                    </option>
+
+                                    <option value="Normal">
+                                        Normal
+                                    </option>
+
+                                    <option value="Prioritaria">
+                                        Prioritaria
+                                    </option>
+
+                                    <option value="Retrasada">
+                                        Retrasada
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="table-container">
+
+                            <table>
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>Código OT</th>
+                                        <th>Cotización</th>
+                                        <th>Estado</th>
+                                        <th>Prioridad</th>
+                                        <th>Fecha requerida</th>
+                                        <th>Hora</th>
+                                        <th>Acciones</th>
+
+                                    </tr>
+
+                                </thead>
+
+
+                                <tbody id="tablaOT">
+
+                                    <tr>
+
+                                        <td colspan="7">
+                                            Cargando órdenes...
+                                        </td>
+
+                                    </tr>
+
+                                </tbody>
+
+                            </table>
+
+
+                            <div
+                                id="paginacionOT"
+                                class="pagination">
+                            </div>
+
+                        </div>
+
+                    </section>
+
+                </div>
+
+                <!-- =========================
+                    ORDENES EN REVISIÓN
+                ========================== -->
+
+                <div id="view-ordenes-revision" class="view-hidden">
+
+                    <section class="panel">
+
+                        <div class="panel-header">
+
+                            <div>
+
+                                <h3>Órdenes de Trabajo En Revisión</h3>
+
+                                <p>
+                                    Órdenes pendientes de decisión por el Cotizador
+                                </p>
+
+                            </div>
+
+                        </div>
+
+                        <div class="table-container">
+
+                            <table>
+
+                                <thead>
+                                    <tr>
+                                        <th>Código OT</th>
+                                        <th>Cotización</th>
+                                        <th>Estado</th>
+                                        <th>Prioridad</th>
+                                        <th>Fecha requerida</th>
+                                        <th>Hora</th>
+                                        <th>Acciones</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody id="tablaOTRevision">
+
+                                    <tr>
+                                        <td colspan="7">
+                                            Cargando órdenes en revisión...
+                                        </td>
+                                    </tr>
+
+                                </tbody>
+
+                            </table>
+
+                            <div
+                                id="paginacionOTRevision"
+                                class="pagination">
+                            </div>
+
+                        </div>
+
+                    </section>
+
+                </div>
+
+                <!-- =========================
+                        ORDENES HISTORIAL
+                    ========================== -->
+
+                <div id="view-ordenes-historial" class="view-hidden">
+
+                    <section class="panel">
+
+                        <div class="panel-header">
+
+                            <div>
+
+                                <h3>Historial de Órdenes de Trabajo</h3>
+
+                                <p>
+                                    Órdenes de trabajo finalizadas
+                                </p>
+
+                            </div>
+
+                        </div>
+                        <!-- FILTROS DE HISTORIAL -->
+
+                    <div class="filters-container">
+
+                        <div class="filter-group">
+
+                            <label for="filtroCotizacionHistorial">
+                                Código de cotización
+                            </label>
+
+                            <input
+                                type="text"
+                                id="filtroCotizacionHistorial"
+                                inputmode="numeric"
+                                placeholder="Número de cotización"
+                            >
+
+                        </div>
+
+
+                        <div class="filter-group">
+
+                            <label for="filtroOTHistorial">
+                                Código OT
+                            </label>
+
+                            <input
+                                type="text"
+                                id="filtroOTHistorial"
+                                inputmode="numeric"
+                                placeholder="Número de OT"
+                            >
+
+                        </div>
+
+                    </div>
+
+                        <div class="table-container">
+
+                            <table>
+
+                                <thead>
+
+                                    <tr>
+
+                                        <th>Código OT</th>
+                                        <th>Cotización</th>
+                                        <th>Estado</th>
+                                        <th>Fecha requerida</th>
+                                        <th>Hora</th>
+                                        <th>Finalizada el</th>
+                                        <th>Acciones</th>
+
+                                    </tr>
+
+                                </thead>
+
+                                <tbody id="tablaOTHistorial">
+
+                                    <tr>
+                                        <td colspan="7">
+                                            Cargando historial...
+                                        </td>
+                                    </tr>
+
+                                </tbody>
+
+                            </table>
+
+                            <div
+                                id="paginacionOTHistorial"
+                                class="pagination">
+                            </div>
+
+                        </div>
+
+                    </section>
+
+                </div>
+
+                <!-- =========================
+                        HISTORIAL DE TRABAJOS DEL DISEÑADOR
+                    ========================== -->
+                    <div id="view-ordenes-historial-disenador"
+    class="view-hidden">
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <div>
+
+                <h3>
+                    Historial de mis trabajos
+                </h3>
+
+                <p>
+                    Órdenes de trabajo finalizadas
+                    en las que has participado
+                </p>
+
+            </div>
+
+        </div>
+
+        <div class="table-container">
+
+            <table>
+
+                <thead>
+                    <tr>
+
+                        <th>Código OT</th>
+                        <th>Cotización</th>
+                        <th>Fecha requerida</th>
+                        <th>Hora</th>
+                        <th>Acciones</th>
+
+                    </tr>
+                </thead>
+
+                <tbody id="tablaOTHistorialDisenador">
+
+                    <tr>
+
+                        <td colspan="5">
+                            Cargando historial...
+                        </td>
+
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+                    </div>
+
+                <!-- =========================
+                        HISTORIAL DE TRABAJOS DEL MAQUINISTA
+                    ========================== -->
+                    <div id="view-ordenes-historial-maquinista"
+    class="view-hidden">
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <div>
+
+                <h3>
+                    Historial de mis trabajos
+                </h3>
+
+                <p>
+                    Órdenes de trabajo finalizadas
+                    en las que has participado
+                </p>
+
+            </div>
+
+        </div>
+
+        <div class="table-container">
+
+            <table>
+
+                <thead>
+                    <tr>
+                        <th>Código OT</th>
+                        <th>Cotización</th>
+                        <th>Fecha requerida</th>
+                        <th>Hora</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody id="tablaOTHistorialMaquinista">
+
+                    <tr>
+                        <td colspan="5">
+                            Cargando historial...
+                        </td>
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+                    </div>
+                <!-- =========================
+                        COTIZAR MANO DE OBRA
+                    ========================== -->
+
+                    <div id="view-cotizar-mano-obra"
+                        class="view-hidden">
+
+                        <section class="panel">
+
+                            <div class="panel-header">
+
+                                <div>
+
+                                    <h3>Cotizar mano de obra</h3>
+
+                                    <p>
+                                        Cotizaciones pendientes de evaluación de diseño
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="table-container">
+
+                                <table>
+
+                                    <thead>
+
+                                        <tr>
+
+                                            <th>Código</th>
+                                            <th>Producto</th>
+                                            <th>Tamaño</th>
+                                            <th>Material</th>
+                                            <th>Cantidad</th>
+                                            <th>Costo producción</th>
+                                            <th>Fecha requerida</th>
+                                            <th>Acciones</th>
+
+                                        </tr>
+
+                                    </thead>
+
+                                    <tbody id="tablaCotizacionesDiseno">
+
+                                        <tr>
+
+                                            <td colspan="8">
+                                                Cargando cotizaciones...
+                                            </td>
+
+                                        </tr>
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+
+                        </section>
+
+                    </div>
+
+                <!-- =========================
+                    DETALLE COTIZACIÓN DISEÑO
+                    ========================== -->
+
+                    <div id="view-detalle-cotizacion-diseno"
+                        class="view-hidden">
+
+                        <section class="panel">
+
+                            <div class="panel-header">
+
+                                <div>
+                                    <h3 id="tituloCotizacionDiseno">
+                                        Cotizar mano de obra
+                                    </h3>
+
+                                    <p>
+                                        Evaluación del costo de diseño
+                                    </p>
+                                </div>
+
+                            </div>
+
+                            <div id="detalleCotizacionDiseno">
+
+                                <p>Cargando información...</p>
+
+                            </div>
+
+                        </section>
+
+                    </div>
+
+
+                <!-- =========================
+                    DETALLE DE OT
+                ========================== -->
+
+                <div id="view-detalle-ot" class="view-hidden">
+
+                    <section class="panel">
+
+                        <div class="panel-header panel-header-actions">
+
+                            <div>
+
+                                <h3 id="detalleOTCodigo">
+                                    Detalle de OT
+                                </h3>
+
+                                <p>
+                                    Información y seguimiento de la orden de trabajo
+                                </p>
+
+                            </div>
+
+
+                            <button
+                                class="secondary-button"
+                                onclick="volverOrdenes()">
+
+                                ← Volver a OTs
+
+                            </button>
+
+                        </div>
+
+
+                        <!-- INFORMACIÓN GENERAL -->
+
+                        <div class="cards">
+
+                            <div class="card">
+
+                                <div class="card-icon">📌</div>
+
+                                <div>
+                                    <span>Estado</span>
+                                    <strong id="detalleOTEstado">—</strong>
+                                </div>
+
+                            </div>
+
+
+                            <div class="card">
+
+                                <div class="card-icon">⚠️</div>
+
+                                <div>
+                                    <span>Prioridad</span>
+                                    <strong id="detalleOTPrioridad">—</strong>
+                                </div>
+
+                            </div>
+
+
+                            <div class="card">
+
+                                <div class="card-icon">📅</div>
+
+                                <div>
+                                    <span>Fecha requerida</span>
+                                    <strong id="detalleOTFecha">—</strong>
+                                </div>
+
+                            </div>
+
+
+                            <div class="card">
+
+                                <div class="card-icon">⏰</div>
+
+                                <div>
+                                    <span>Hora requerida</span>
+                                    <strong id="detalleOTHora">—</strong>
+                                </div>
+
+                            </div>
+
+                        </div>
+                        <!-- =========================
+                                ACCIONES DE ESTADO
+                            ========================== -->
+
+                        <section class="panel">
+
+                            <div class="panel-header">
+
+                                <div>
+
+                                    <h3>Avance de la OT</h3>
+
+                                    <p>
+                                        Actualización del estado de la orden de trabajo
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+
+                            <div id="accionesEstadoOT">
+
+                                Cargando acciones...
+
+                            </div>
+
+                        </section>
+
+                        <!-- =========================
+                        INFORMACIÓN DE LA COTIZACIÓN
+                    ========================== -->
+
+                    <section class="panel">
+
+                        <div class="panel-header">
+
+                            <div>
+
+                                <h3>Información de la cotización</h3>
+
+                                <p>
+                                    Datos y especificaciones del producto
+                                </p>
+
+                            </div>
+
+                        </div>
+
+
+                        <!-- INFORMACIÓN GENERAL -->
+
+                        <div class="system-status">
+
+                            <div class="status-item">
+                                <div>
+                                    <strong>Código</strong>
+                                    <small id="detalleOTCotizacion">—</small>
+                                </div>
+                            </div>
+
+                            <div class="status-item">
+                                <div>
+                                    <strong>Cliente</strong>
+                                    <small id="detalleOTCliente">—</small>
+                                </div>
+                            </div>
+
+                            <div class="status-item">
+                                <div>
+                                    <strong>Producto</strong>
+                                    <small id="detalleOTProducto">—</small>
+                                </div>
+                            </div>
+
+                            <div class="status-item">
+                                <div>
+                                    <strong>Cantidad</strong>
+                                    <small id="detalleOTCantidad">—</small>
+                                </div>
+                            </div>
+
+                        </div>
+
+
+                        <!-- ESPECIFICACIONES DEL PRODUCTO -->
+
+                        <div style="margin-top: 25px;">
+
+                            <h4 style="margin-bottom: 15px;">
+                                Especificaciones del producto
+                            </h4>
+
+                            <div class="system-status">
+
+                                <div class="status-item">
+                                    <div>
+                                        <strong>Tamaño</strong>
+                                        <small id="detalleOTTamano">—</small>
+                                    </div>
+                                </div>
+
+                                <div class="status-item">
+                                    <div>
+                                        <strong>Material</strong>
+                                        <small id="detalleOTMaterial">—</small>
+                                    </div>
+                                </div>
+
+                                <div class="status-item">
+                                    <div>
+                                        <strong>Tipo de impresión</strong>
+                                        <small id="detalleOTTImpresion">—</small>
+                                    </div>
+                                </div>
+
+                                <div class="status-item">
+                                    <div>
+                                        <strong>Color</strong>
+                                        <small id="detalleOTColor">—</small>
+                                    </div>
+                                </div>
+
+                                <div class="status-item">
+                                    <div>
+                                        <strong>Caras</strong>
+                                        <small id="detalleOTCaras">—</small>
+                                    </div>
+                                </div>
+
+                                <div class="status-item">
+                                    <div>
+                                        <strong>Acabado</strong>
+                                        <small id="detalleOTAcabado">—</small>
+                                    </div>
+                                </div>
+
+                                <div class="status-item">
+                                    <div>
+                                        <strong>Sangrado</strong>
+                                        <small id="detalleOTSangrado">—</small>
+                                    </div>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                    </section>
+
+
+                <!-- =========================
+                            DISEÑO
+                ========================== -->
+
+                <section class="panel">
+
+                    <div class="panel-header">
+
+                        <div>
+                            <h3>Diseño</h3>
+
+                            <p>
+                                Diseños asociados a esta orden de trabajo
+                            </p>
+                        </div>
+
+                    </div>
+
+                    <div id="detalleOTDiseno">
+
+                        <p>Cargando diseños...</p>
+
+                    </div>
+
+                    <hr>
+
+                    <h4 id="tituloRegistrarDiseno">Registrar nuevo diseño</h4>
+
+                    <form id="formDisenoOT">
+
+                        <div class="form-grid">
+
+                            <div class="form-group">
+
+                                <label for="nombreDiseno">
+                                    Nombre del diseño
+                                </label>
+
+                                <input
+                                    type="text"
+                                    id="nombreDiseno"
+                                    placeholder="Ej. Diseño volante A4"
+                                    required
+                                >
+
+                            </div>
+
+                            <div class="form-group">
+
+                                <label for="archivoDiseno">
+                                    Archivo del diseño
+                                </label>
+
+                                <input
+                                    type="text"
+                                    id="archivoDiseno"
+                                    placeholder="Ej. volante_a4.pdf"
+                                    required
+                                >
+
+                            </div>
+
+                            <div class="form-group">
+
+                                <label for="descripcionDiseno">
+                                    Descripción
+                                </label>
+
+                                <textarea
+                                    id="descripcionDiseno"
+                                    placeholder="Descripción del diseño"
+                                ></textarea>
+
+                            </div>
+
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="primary-button"
+                        >
+                            Registrar diseño
+                        </button>
+
+                    </form>
+
+                </section>
+
+
+                <!-- =========================
+                         IMPRESIÓN
+                ========================== -->
+
+                <section class="panel">
+
+                    <div class="panel-header">
+
+                        <div>
+                            <h3>Impresión</h3>
+
+                            <p>
+                                Registros de impresión de esta orden de trabajo
+                            </p>
+                        </div>
+
+                    </div>
+
+                    <div id="detalleOTImpresion">
+
+                        <p>Cargando impresiones...</p>
+
+                    </div>
+
+                    <hr>
+
+                    <h4 id="tituloRegistrarImpresion">Registrar impresión</h4>
+
+                    <form id="formImpresionOT">
+
+                        <div class="form-grid">
+
+                            <div class="form-group">
+
+                                <label for="disenoImpresion">
+                                    Diseño
+                                </label>
+
+                                <select
+                                    id="disenoImpresion"
+                                    required
+                                >
+
+                                    <option value="">
+                                        Seleccionar diseño
+                                    </option>
+
+                                </select>
+
+                            </div>
+
+                            <div class="form-group">
+
+                                <label for="maquinaImpresion">
+                                    Máquina
+                                </label>
+
+                                <input
+                                    type="text"
+                                    id="maquinaImpresion"
+                                    placeholder="Ej. MAQ-001"
+                                    required
+                                >
+
+                            </div>
+
+                            <div class="form-group">
+
+                                <label for="cantidadImpresion">
+                                    Cantidad impresa
+                                </label>
+
+                                <input
+                                    type="number"
+                                    id="cantidadImpresion"
+                                    min="1"
+                                    placeholder="Ej. 500"
+                                    required
+                                >
+
+                            </div>
+
+                            <div class="form-group">
+
+                                <label for="observacionesImpresion">
+                                    Observaciones
+                                </label>
+
+                                <textarea
+                                    id="observacionesImpresion"
+                                    placeholder="Observaciones de la impresión"
+                                ></textarea>
+
+                            </div>
+
+                        </div>
+
+                        <button
+                            type="submit"
+                            class="primary-button"
+                        >
+                            Registrar impresión
+                        </button>
+
+                    </form>
+
+                </section>
+
+
+                        <!-- HISTORIAL -->
+
+                        <section class="panel" id="panelHistorialOT">
+
+                            <div class="panel-header">
+
+                                <div>
+
+                                    <h3>Historial de la OT</h3>
+
+                                    <p>
+                                        Eventos registrados exclusivamente para esta orden
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+
+                            <div class="table-container">
+
+                                <table>
+
+                                    <thead>
+
+                                        <tr>
+
+                                            <th>Fecha</th>
+                                            <th>Usuario</th>
+                                            <th>Evento</th>
+                                            <th>Estado anterior</th>
+                                            <th>Estado nuevo</th>
+                                            <th>Detalle</th>
+
+                                        </tr>
+
+                                    </thead>
+
+
+                                    <tbody id="tablaLogsOT">
+
+                                        <tr>
+
+                                            <td colspan="6">
+                                                Cargando historial...
+                                            </td>
+
+                                        </tr>
+
+                                    </tbody>
+
+                                </table>
+
+                            </div>
+
+                        </section>
+
+                    </section>
+
+                </div>
+
+
+                </section>
+
+                </main>
+
+                </div>
+
+
+<script src="/js/app.js"></script>
+
+</body>
+
+</html>

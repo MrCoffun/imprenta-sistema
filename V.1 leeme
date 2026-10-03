@@ -1,0 +1,28 @@
+## Actualización de versión
+
+En esta versión se implementaron y ajustaron las siguientes funcionalidades:
+
+- Se mejoró el flujo de cotizaciones, incorporando la evaluación y modificación de la mano de obra de diseño antes de la aprobación.
+- La aprobación de una cotización genera automáticamente la Orden de Trabajo.
+- Se implementaron los estados de OT: Pendiente, En Diseño, En Impresión, En Revisión y Finalizada.
+- Se implementaron las transiciones de estado según el rol.
+- Se ajustó la visualización de OTs según cada rol:
+  - Administrador: Activas, En revisión e Historial general.
+  - Cotizador: Activas, En revisión e Historial general.
+  - Diseñador: Activas e Historial de mis trabajos.
+  - Maquinista: Activas e Historial de mis trabajos.
+- Se implementó el historial de participación mediante logs_ot.
+- Se incorporó la consulta de logs por OT para mantener la trazabilidad.
+- Se ajustaron los filtros, paginación y prioridades de las OTs.
+- Se corrigieron las navegaciones entre vistas y los accesos correspondientes a cada rol.
+- Se mantuvieron las validaciones de las operaciones desde el servidor.
+
+Nota: El diseño visual definitivo y algunos ajustes de gestión de usuarios/permisos quedan para la siguiente etapa de desarrollo.
+
+Usuarios de prueba:
+- admin — Administrador
+- usuario.prueba — Cotizador
+- diseno — Diseñador
+- maquina — Maquinista
+
+Las credenciales de acceso no se incluyen en el repositorio público.
