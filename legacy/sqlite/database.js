@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const rutaBD = path.join(__dirname, '..', 'database', 'imprenta.db');
+const rutaBD = path.join(__dirname, '..', '..', 'database', 'imprenta.db');
 
 const db = new Database(rutaBD);
 

@@ -5,6 +5,7 @@ database/*.db
 database/*.db-wal
 database/*.db-shm
 .env.*
+!.env.example
 *.log
 
 sessions/

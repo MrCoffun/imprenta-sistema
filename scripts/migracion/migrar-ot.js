@@ -1,10 +1,10 @@
-
+﻿
 const mongoose = require('mongoose');
-const conectarMongoDB = require('./src/mongodb');
-const sqlite = require('./src/database');
+const conectarMongoDB = require('../../src/mongodb');
+const sqlite = require('../../legacy/sqlite/database');
 
-const Cotizacion = require('./src/models/Cotizacion');
-const OrdenTrabajo = require('./src/models/OrdenTrabajo');
+const Cotizacion = require('../../src/models/Cotizacion');
+const OrdenTrabajo = require('../../src/models/OrdenTrabajo');
 
 async function migrar() {
     try {
@@ -15,7 +15,7 @@ async function migrar() {
             ORDER BY id_ot
         `).all();
 
-        console.log('📦 Órdenes encontradas en SQLite:', ordenes.length);
+        console.log('ðŸ“¦ Ã“rdenes encontradas en SQLite:', ordenes.length);
 
         const cotizaciones = await Cotizacion.find(
             {},
@@ -30,7 +30,7 @@ async function migrar() {
         for (const ot of ordenes) {
             if (!idsCotizaciones.has(ot.id_cotizacion)) {
                 throw new Error(
-                    `La OT ${ot.id_ot} referencia una cotización inexistente: ${ot.id_cotizacion}`
+                    `La OT ${ot.id_ot} referencia una cotizaciÃ³n inexistente: ${ot.id_cotizacion}`
                 );
             }
         }
@@ -56,18 +56,18 @@ async function migrar() {
 
         const totalMongo = await OrdenTrabajo.countDocuments();
 
-        console.log('✅ OT insertadas:', insertadas);
-        console.log('🔄 OT existentes procesadas:', actualizadas);
-        console.log('📊 Total de OT en MongoDB:', totalMongo);
+        console.log('âœ… OT insertadas:', insertadas);
+        console.log('ðŸ”„ OT existentes procesadas:', actualizadas);
+        console.log('ðŸ“Š Total de OT en MongoDB:', totalMongo);
 
         if (totalMongo !== ordenes.length) {
             throw new Error('La cantidad de OT no coincide');
         }
 
-        console.log('🎉 Migración de órdenes de trabajo completada');
+        console.log('ðŸŽ‰ MigraciÃ³n de Ã³rdenes de trabajo completada');
 
     } catch (error) {
-        console.error('❌ Error:', error.message);
+        console.error('âŒ Error:', error.message);
         process.exitCode = 1;
 
     } finally {

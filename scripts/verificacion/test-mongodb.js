@@ -1,4 +1,4 @@
-const conectarMongoDB = require('./src/mongodb');
+const conectarMongoDB = require('../../src/mongodb');
 const mongoose = require('mongoose');
 
 async function probarConexion() {

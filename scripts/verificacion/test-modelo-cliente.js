@@ -1,7 +1,7 @@
 
 const mongoose = require('mongoose');
-const conectarMongoDB = require('./src/mongodb');
-const Cliente = require('./src/models/Cliente');
+const conectarMongoDB = require('../../src/mongodb');
+const Cliente = require('../../src/models/Cliente');
 
 async function probarModelo() {
     try {

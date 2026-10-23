@@ -1,10 +1,10 @@
 
 const mongoose = require('mongoose');
-const conectarMongoDB = require('./src/mongodb');
-const sqlite = require('./src/database');
+const conectarMongoDB = require('../../src/mongodb');
+const sqlite = require('../../legacy/sqlite/database');
 
-const Usuario = require('./src/models/Usuario');
-const Tarifa = require('./src/models/Tarifa');
+const Usuario = require('../../src/models/Usuario');
+const Tarifa = require('../../src/models/Tarifa');
 
 async function migrar() {
     try {

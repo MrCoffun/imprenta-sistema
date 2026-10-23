@@ -4895,7 +4895,7 @@ async function cargarClientesParaCotizacion() {
     try {
 
         const respuesta =
-            await fetch('/api/clientes');
+            await fetch('/api/clientes?pagina=1&porPagina=100');
 
         const datos =
             await respuesta.json();

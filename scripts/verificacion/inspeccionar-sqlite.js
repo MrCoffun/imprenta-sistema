@@ -1,4 +1,4 @@
-const db = require('./src/database');
+const db = require('../../legacy/sqlite/database');
 
 const tablas = db.prepare(`
     SELECT name, sql

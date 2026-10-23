@@ -1,13 +1,13 @@
-
+﻿
 const mongoose = require('mongoose');
-const conectarMongoDB = require('./src/mongodb');
-const sqlite = require('./src/database');
+const conectarMongoDB = require('../../src/mongodb');
+const sqlite = require('../../legacy/sqlite/database');
 
-const Archivo = require('./src/models/Archivo');
-const LogOT = require('./src/models/LogOT');
-const OrdenTrabajo = require('./src/models/OrdenTrabajo');
-const Cotizacion = require('./src/models/Cotizacion');
-const Usuario = require('./src/models/Usuario');
+const Archivo = require('../../src/models/Archivo');
+const LogOT = require('../../src/models/LogOT');
+const OrdenTrabajo = require('../../src/models/OrdenTrabajo');
+const Cotizacion = require('../../src/models/Cotizacion');
+const Usuario = require('../../src/models/Usuario');
 
 async function migrar() {
     try {
@@ -52,13 +52,13 @@ async function migrar() {
 
             if (!idsCotizaciones.has(a.id_cotizacion)) {
                 throw new Error(
-                    `Archivo ${a.id_archivo}: cotización inexistente`
+                    `Archivo ${a.id_archivo}: cotizaciÃ³n inexistente`
                 );
             }
 
             if (ot.id_cotizacion !== a.id_cotizacion) {
                 throw new Error(
-                    `Archivo ${a.id_archivo}: cotización distinta a la de su OT`
+                    `Archivo ${a.id_archivo}: cotizaciÃ³n distinta a la de su OT`
                 );
             }
 
@@ -118,10 +118,10 @@ async function migrar() {
             throw new Error('Las cantidades no coinciden');
         }
 
-        console.log('🎉 Migración de archivos y logs completada');
+        console.log('ðŸŽ‰ MigraciÃ³n de archivos y logs completada');
 
     } catch (error) {
-        console.error('❌ Error:', error.message);
+        console.error('âŒ Error:', error.message);
         process.exitCode = 1;
 
     } finally {

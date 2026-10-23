@@ -1,4 +1,4 @@
-const db = require('./database');
+const db = require('../legacy/sqlite/database');
 
 console.log('\n========================================');
 console.log('PASO 20 - PRUEBA DE CONEXIÓN NODE → SQLITE');
