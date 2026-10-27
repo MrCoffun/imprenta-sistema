@@ -9,6 +9,7 @@ const btnCerrarSesion = document.getElementById('btnCerrarSesion');
 const btnNuevaCotizacion = document.getElementById('btnNuevaCotizacion');
 const btnCancelarCotizacion = document.getElementById('btnCancelarCotizacion');
 const btnCancelarCotizacionForm = document.getElementById('btnCancelarCotizacionForm');
+let cierreSesionEnCurso = false;
 
 console.log('🔎 Botón Nueva cotización:', btnNuevaCotizacion);
 
@@ -28,6 +29,7 @@ async function comprobarSesion() {
             await respuesta.json();
 
         mostrarSistema(datos.usuario);
+        await cargarPerfil();
 
     } catch {
 
@@ -37,6 +39,7 @@ async function comprobarSesion() {
 
 function mostrarLogin() {
 
+    limpiarNotificaciones();
     loginView.style.display = 'flex';
     appSistema.style.display = 'none';
 
@@ -98,6 +101,12 @@ formLogin?.addEventListener('submit', async (e) => {
 
         await cargarPerfil();
 
+        // Confirmar el ingreso únicamente después de validar las credenciales.
+        mostrarNotificacion('Has iniciado sesión correctamente.', {
+            tipo: 'exito',
+            titulo: 'Sesión iniciada'
+        });
+
     } catch (error) {
 
         loginError.textContent =
@@ -108,24 +117,43 @@ formLogin?.addEventListener('submit', async (e) => {
 });
 
 btnCerrarSesion?.addEventListener('click', async () => {
+    // Evitar solicitudes repetidas por una doble pulsación.
+    if (cierreSesionEnCurso) return;
+    cierreSesionEnCurso = true;
 
     try {
+        const confirmado = await confirmarAccion(
+            '¿Deseas cerrar sesión y volver a la pantalla de acceso?',
+            { titulo: 'Cerrar sesión', textoConfirmar: 'Sí, cerrar sesión' }
+        );
 
-        await fetch('/api/logout', {
+        if (!confirmado) return;
+
+        btnCerrarSesion.disabled = true;
+        const respuesta = await fetch('/api/logout', {
             method: 'POST'
         });
+
+        if (!respuesta.ok) {
+            const datos = await respuesta.json().catch(() => ({}));
+            throw new Error(datos.error || 'No se pudo cerrar la sesión. Inténtalo de nuevo.');
+        }
 
         mostrarLogin();
 
     } catch (error) {
-
         console.error(
             '❌ Error cerrando sesión:',
             error
         );
-
+        mostrarNotificacion(error.message, {
+            tipo: 'error',
+            titulo: 'No se pudo cerrar la sesión'
+        });
+    } finally {
+        btnCerrarSesion.disabled = false;
+        cierreSesionEnCurso = false;
     }
-
 });
 
 comprobarSesion();
@@ -139,6 +167,180 @@ const menuItems =
 
 const vistaDashboard =
     document.getElementById('view-dashboard');
+
+// Administración de cuentas: solo se habilita para el rol Administrador.
+const vistaUsuarios = document.getElementById('view-usuarios');
+const formNuevoUsuario = document.getElementById('formNuevoUsuario');
+const tablaUsuarios = document.getElementById('tablaUsuarios');
+const btnGuardarUsuario = document.getElementById('btnGuardarUsuario');
+let usuarioActualId = null;
+
+// Consultar y mostrar únicamente los datos de cuenta permitidos por el servidor.
+async function cargarUsuarios() {
+    if (!tablaUsuarios) return;
+    tablaUsuarios.innerHTML = '<tr><td colspan="5">Cargando usuarios...</td></tr>';
+
+    try {
+        const respuesta = await fetch('/api/usuarios');
+        const datos = await respuesta.json();
+
+        if (respuesta.status === 401) {
+            mostrarLogin();
+            return;
+        }
+        if (!respuesta.ok) {
+            throw new Error(datos.error || 'No se pudieron consultar las cuentas');
+        }
+
+        usuarioActualId = Number(datos.usuarioActualId);
+        tablaUsuarios.replaceChildren();
+
+        if (!Array.isArray(datos.usuarios) || datos.usuarios.length === 0) {
+            tablaUsuarios.innerHTML = '<tr><td colspan="5">No hay cuentas registradas.</td></tr>';
+            return;
+        }
+
+        datos.usuarios.forEach(usuario => {
+            const cuentaActiva = usuario.estado === true;
+            const fila = document.createElement('tr');
+
+            [
+                `${usuario.nombres} ${usuario.apellidos}`,
+                usuario.usuario,
+                usuario.rol,
+                cuentaActiva ? 'Activa' : 'Desactivada'
+            ].forEach(texto => {
+                const celda = document.createElement('td');
+                celda.textContent = texto;
+                fila.appendChild(celda);
+            });
+
+            const celdaAccion = document.createElement('td');
+            const boton = document.createElement('button');
+            boton.type = 'button';
+            boton.className = cuentaActiva ? 'danger-button' : 'secondary-button';
+            boton.textContent = cuentaActiva ? 'Desactivar' : 'Reactivar';
+            boton.dataset.id = String(usuario.id_usuario);
+            boton.dataset.usuario = usuario.usuario;
+            boton.dataset.activo = String(cuentaActiva);
+            celdaAccion.appendChild(boton);
+            fila.appendChild(celdaAccion);
+            tablaUsuarios.appendChild(fila);
+        });
+    } catch (error) {
+        tablaUsuarios.innerHTML = '<tr><td colspan="5">No se pudo cargar la lista de usuarios.</td></tr>';
+        mostrarNotificacion(error.message, {
+            tipo: 'error',
+            titulo: 'No se pudieron cargar las cuentas'
+        });
+    }
+}
+
+formNuevoUsuario?.addEventListener('submit', async evento => {
+    evento.preventDefault();
+    btnGuardarUsuario.disabled = true;
+
+    try {
+        const respuesta = await fetch('/api/usuarios', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                nombres: document.getElementById('nuevoUsuarioNombres').value,
+                apellidos: document.getElementById('nuevoUsuarioApellidos').value,
+                usuario: document.getElementById('nuevoUsuarioCuenta').value,
+                contraseña: document.getElementById('nuevoUsuarioContrasena').value,
+                rol: document.getElementById('nuevoUsuarioRol').value
+            })
+        });
+        const datos = await respuesta.json();
+
+        if (respuesta.status === 401) {
+            mostrarLogin();
+            return;
+        }
+        if (!respuesta.ok) {
+            throw new Error(datos.error || 'No se pudo crear la cuenta');
+        }
+
+        formNuevoUsuario.reset();
+        await cargarUsuarios();
+        mostrarNotificacion('La cuenta está lista para iniciar sesión con el rol asignado.', {
+            tipo: 'exito',
+            titulo: 'Cuenta creada'
+        });
+    } catch (error) {
+        mostrarNotificacion(error.message, {
+            tipo: 'error',
+            titulo: 'No se pudo crear la cuenta'
+        });
+    } finally {
+        btnGuardarUsuario.disabled = false;
+    }
+});
+
+tablaUsuarios?.addEventListener('click', async evento => {
+    const boton = evento.target.closest('button[data-id]');
+    if (!boton || boton.disabled) return;
+
+    const activar = boton.dataset.activo !== 'true';
+    const esCuentaActual = Number(boton.dataset.id) === usuarioActualId;
+    let mensaje = activar
+        ? `¿Deseas reactivar la cuenta ${boton.dataset.usuario}?`
+        : `¿Deseas desactivar la cuenta ${boton.dataset.usuario}? Su historial se conservará.`;
+
+    if (!activar && esCuentaActual) {
+        mensaje += ' Tu sesión se cerrará y necesitarás otra vía para reactivar esta cuenta.';
+    }
+
+    boton.disabled = true;
+    try {
+        const confirmado = await confirmarAccion(mensaje, {
+            titulo: activar ? 'Reactivar cuenta' : 'Desactivar cuenta',
+            textoConfirmar: activar ? 'Sí, reactivar' : 'Sí, desactivar'
+        });
+        if (!confirmado) return;
+
+        const respuesta = await fetch(
+            `/api/usuarios/${encodeURIComponent(boton.dataset.id)}/estado`,
+            {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ activo: activar })
+            }
+        );
+        const datos = await respuesta.json();
+
+        if (respuesta.status === 401) {
+            mostrarLogin();
+            return;
+        }
+        if (!respuesta.ok) {
+            throw new Error(datos.error || 'No se pudo actualizar la cuenta');
+        }
+
+        if (datos.sesionCerrada) {
+            mostrarLogin();
+            mostrarNotificacion('Tu cuenta fue desactivada y tu sesión se cerró.', {
+                tipo: 'informacion',
+                titulo: 'Cuenta desactivada'
+            });
+            return;
+        }
+
+        await cargarUsuarios();
+        mostrarNotificacion(datos.mensaje, {
+            tipo: 'exito',
+            titulo: activar ? 'Cuenta reactivada' : 'Cuenta desactivada'
+        });
+    } catch (error) {
+        mostrarNotificacion(error.message, {
+            tipo: 'error',
+            titulo: 'No se pudo actualizar la cuenta'
+        });
+    } finally {
+        boton.disabled = false;
+    }
+});
 
 const btnMenuCotizaciones =
     document.getElementById('btnMenuCotizaciones');
@@ -313,9 +515,10 @@ async function cargarTarifasCotizacion() {
             error
         );
 
-        alert(
-            'No se pudieron cargar las tarifas de cotización.'
-        );
+        mostrarNotificacion('No se pudieron cargar las tarifas de cotización.', {
+            tipo: 'error',
+            titulo: 'Error al cargar tarifas'
+        });
 
     }
 
@@ -646,7 +849,8 @@ async function cargarPerfil() {
                 'dashboard',
                 'cotizaciones',
                 'clientes',
-                'ordenes'
+                'ordenes',
+                'usuarios'
             ];
 
             vistaInicial =
@@ -716,7 +920,7 @@ function configurarMenuPorRol() {
     // Botones del menú principal visibles por rol
     // (se identifican por data-view o por id)
     const botonesPorRol = {
-        administrador: ['dashboard', 'clientes', 'btnMenuCotizaciones', 'btnMenuOrdenes'],
+        administrador: ['dashboard', 'usuarios', 'clientes', 'btnMenuCotizaciones', 'btnMenuOrdenes'],
         cotizador:     ['clientes', 'btnMenuCotizaciones', 'btnMenuOrdenes'],
         'diseñador':   ['cotizar-mano-obra', 'btnMenuOrdenes'],
         maquinista:    ['btnMenuOrdenes']
@@ -1055,6 +1259,7 @@ function mostrarVista(vista) {
     vistaDetalleCotizacionDiseno?.classList.add('view-hidden');
     vistaCotizacionesDiseno?.classList.add('view-hidden');
     vistaCotizacionesAprobacion?.classList.add('view-hidden');
+    vistaUsuarios?.classList.add('view-hidden');
     vistaClientes?.classList.add('view-hidden');
     vistaNuevoCliente?.classList.add('view-hidden');
     vistaOrdenes?.classList.add('view-hidden');
@@ -1064,7 +1269,6 @@ function mostrarVista(vista) {
     vistaHistorialDisenador?.classList.add('view-hidden');
     vistaHistorialMaquinista?.classList.add('view-hidden');
 
-    
     vistaHistorialAprobadas?.classList.add('view-hidden');
     vistaHistorialRechazadas?.classList.add('view-hidden');
 
@@ -1095,6 +1299,13 @@ function mostrarVista(vista) {
 
         cargarCotizaciones();
 
+    }
+
+    if (vista === 'usuarios') {
+        vistaUsuarios?.classList.remove('view-hidden');
+        pageTitle.textContent = 'Administración de usuarios';
+        pageDescription.textContent = 'Creación y estado de las cuentas del sistema';
+        cargarUsuarios();
     }
 
     if (vista === 'nueva-cotizacion') {
@@ -2430,9 +2641,10 @@ formNuevoCliente?.addEventListener(
             }
 
 
-            alert(
-                'Cliente creado correctamente.'
-            );
+            mostrarNotificacion('Cliente creado correctamente.', {
+                tipo: 'exito',
+                titulo: 'Cliente registrado'
+            });
 
 
             formNuevoCliente.reset();
@@ -2449,10 +2661,10 @@ formNuevoCliente?.addEventListener(
                 error
             );
 
-            alert(
-                error.message ||
-                'Error al crear el cliente.'
-            );
+            mostrarNotificacion(error.message || 'Error al crear el cliente.', {
+                tipo: 'error',
+                titulo: 'No se pudo crear el cliente'
+            });
 
         }
 
@@ -3273,10 +3485,10 @@ async function verCotizacion(id) {
         );
 
 
-        alert(
-            error.message ||
-            'No se pudo cargar la cotización.'
-        );
+        mostrarNotificacion(error.message || 'No se pudo cargar la cotización.', {
+            tipo: 'error',
+            titulo: 'No se pudo cargar la cotización'
+        });
 
     }
 
@@ -3447,9 +3659,10 @@ async function verCotizacionAprobacion(id) {
                         !Number.isFinite(manoObra) ||
                         manoObra < 0
                     ) {
-                        alert(
-                            'Ingrese un monto válido.'
-                        );
+                        mostrarNotificacion('Ingrese un monto válido.', {
+                            tipo: 'advertencia',
+                            titulo: 'Monto no válido'
+                        });
                         return;
                     }
 
@@ -3482,9 +3695,10 @@ async function verCotizacionAprobacion(id) {
                             );
                         }
 
-                        alert(
-                            'Propuesta de mano de obra modificada correctamente.'
-                        );
+                        mostrarNotificacion('Propuesta de mano de obra modificada correctamente.', {
+                            tipo: 'exito',
+                            titulo: 'Propuesta actualizada'
+                        });
 
                         await verCotizacionAprobacion(id);
 
@@ -3495,10 +3709,10 @@ async function verCotizacionAprobacion(id) {
                             error
                         );
 
-                        alert(
-                            error.message ||
-                            'No se pudo modificar la mano de obra.'
-                        );
+                        mostrarNotificacion(error.message || 'No se pudo modificar la mano de obra.', {
+                            tipo: 'error',
+                            titulo: 'No se pudo modificar la mano de obra'
+                        });
                     }
                 }
             );
@@ -3510,10 +3724,10 @@ async function verCotizacionAprobacion(id) {
             error
         );
 
-        alert(
-            error.message ||
-            'No se pudo abrir la cotización para aprobación.'
-        );
+        mostrarNotificacion(error.message || 'No se pudo abrir la cotización para aprobación.', {
+            tipo: 'error',
+            titulo: 'No se pudo abrir la cotización'
+        });
     }
 }
 
@@ -3547,10 +3761,9 @@ async function aprobarCotizacion(id) {
             );
         }
 
-        alert(
-            `Cotización aprobada correctamente.\n` +
-            `OT creada: ${datos.codigo_ot}\n` +
-            `Prioridad: ${datos.prioridad}`
+        mostrarNotificacion(
+            `Cotización aprobada correctamente.\nOT creada: ${datos.codigo_ot}\nPrioridad: ${datos.prioridad}`,
+            { tipo: 'exito', titulo: 'Cotización aprobada' }
         );
 
             // Actualizar pendientes de aprobación
@@ -3569,10 +3782,10 @@ async function aprobarCotizacion(id) {
             error
         );
 
-        alert(
-            error.message ||
-            'No se pudo aprobar la cotización.'
-        );
+        mostrarNotificacion(error.message || 'No se pudo aprobar la cotización.', {
+            tipo: 'error',
+            titulo: 'No se pudo aprobar la cotización'
+        });
     }
 }
 
@@ -3608,9 +3821,10 @@ async function rechazarCotizacion(id) {
 
         }
 
-        alert(
-            'Cotización rechazada correctamente.'
-        );
+        mostrarNotificacion('Cotización rechazada correctamente.', {
+            tipo: 'informacion',
+            titulo: 'Cotización rechazada'
+        });
 
         await cargarCotizacionesPendientesAprobacion();
 
@@ -3623,10 +3837,10 @@ async function rechazarCotizacion(id) {
             error
         );
 
-        alert(
-            error.message ||
-            'No se pudo rechazar la cotización.'
-        );
+        mostrarNotificacion(error.message || 'No se pudo rechazar la cotización.', {
+            tipo: 'error',
+            titulo: 'No se pudo rechazar la cotización'
+        });
 
     }
 
@@ -4000,9 +4214,10 @@ if (rolUsuario === 'administrador') {
         error
     );
 
-    alert(
-        'No se pudo cargar el detalle de la OT.'
-    );
+    mostrarNotificacion('No se pudo cargar el detalle de la OT.', {
+        tipo: 'error',
+        titulo: 'No se pudo cargar la orden'
+    });
 
     mostrarVista('ordenes');
 }
@@ -4274,10 +4489,10 @@ function mostrarAccionesEstado(ot) {
 
 async function cambiarEstadoOT(idOT, nuevoEstado) {
 
-    const confirmar =
-        confirm(
-            `¿Confirmas cambiar la OT al estado "${nuevoEstado}"?`
-        );
+    const confirmar = await confirmarAccion(
+        `¿Confirmas cambiar la OT al estado "${nuevoEstado}"?`,
+        { titulo: 'Cambiar estado de la OT', textoConfirmar: 'Sí, cambiar estado' }
+    );
 
     if (!confirmar) {
         return;
@@ -4313,7 +4528,10 @@ async function cambiarEstadoOT(idOT, nuevoEstado) {
             );
         }
 
-        alert(datos.mensaje);
+        mostrarNotificacion(datos.mensaje, {
+            tipo: 'exito',
+            titulo: 'Estado de la OT actualizado'
+        });
 
 
         // ==========================================
@@ -4350,10 +4568,10 @@ async function cambiarEstadoOT(idOT, nuevoEstado) {
             error
         );
 
-        alert(
-            error.message ||
-            'Error cambiando estado de la OT'
-        );
+        mostrarNotificacion(error.message || 'Error cambiando estado de la OT', {
+            tipo: 'error',
+            titulo: 'No se pudo cambiar el estado'
+        });
     }
 }
 
@@ -4414,7 +4632,10 @@ document
                 );
             }
 
-            alert('Diseño registrado correctamente.');
+            mostrarNotificacion('Diseño registrado correctamente.', {
+                tipo: 'exito',
+                titulo: 'Diseño registrado'
+            });
 
             // Limpiar formulario
             document
@@ -4431,10 +4652,10 @@ document
                 error
             );
 
-            alert(
-                error.message ||
-                'No se pudo registrar el diseño.'
-            );
+            mostrarNotificacion(error.message || 'No se pudo registrar el diseño.', {
+                tipo: 'error',
+                titulo: 'No se pudo registrar el diseño'
+            });
 
         }
 
@@ -4485,7 +4706,10 @@ document
                     .value.trim();
 
             if (!idDiseno) {
-                alert('Selecciona un diseño.');
+                mostrarNotificacion('Selecciona un diseño.', {
+                    tipo: 'advertencia',
+                    titulo: 'Falta seleccionar el diseño'
+                });
                 return;
             }
 
@@ -4518,7 +4742,10 @@ document
                 );
             }
 
-            alert('Impresión registrada correctamente.');
+            mostrarNotificacion('Impresión registrada correctamente.', {
+                tipo: 'exito',
+                titulo: 'Impresión registrada'
+            });
 
             // Limpiar formulario
             document
@@ -4535,10 +4762,10 @@ document
                 error
             );
 
-            alert(
-                error.message ||
-                'No se pudo registrar la impresión.'
-            );
+            mostrarNotificacion(error.message || 'No se pudo registrar la impresión.', {
+                tipo: 'error',
+                titulo: 'No se pudo registrar la impresión'
+            });
 
         }
 
@@ -4809,8 +5036,9 @@ const datosCotizacion = {
             }
 
 
-            alert(
-                `Cotización ${datos.cotizacion?.codigo_cotizacion || 'creada'} creada correctamente`
+            mostrarNotificacion(
+                `Cotización ${datos.cotizacion?.codigo_cotizacion || 'creada'} creada correctamente.`,
+                { tipo: 'exito', titulo: 'Cotización registrada' }
             );
 
             // Limpiar formulario
@@ -4851,10 +5079,10 @@ const datosCotizacion = {
                 error
             );
 
-            alert(
-                error.message ||
-                'No se pudo crear la cotización.'
-            );
+            mostrarNotificacion(error.message || 'No se pudo crear la cotización.', {
+                tipo: 'error',
+                titulo: 'No se pudo crear la cotización'
+            });
 
         }
 
@@ -5334,10 +5562,10 @@ async function abrirCotizacionDiseno(id) {
             error
         );
 
-        alert(
-            error.message ||
-            'Error al abrir la cotización'
-        );
+        mostrarNotificacion(error.message || 'Error al abrir la cotización', {
+            tipo: 'error',
+            titulo: 'No se pudo abrir la cotización'
+        });
     }
 }
 
@@ -5382,9 +5610,10 @@ async function enviarPropuestaDiseno(id) {
             !Number.isFinite(manoObra) ||
             manoObra < 0
         ) {
-            alert(
-                'Ingrese un monto válido de mano de obra.'
-            );
+            mostrarNotificacion('Ingrese un monto válido de mano de obra.', {
+                tipo: 'advertencia',
+                titulo: 'Monto no válido'
+            });
             return;
         }
 
@@ -5414,9 +5643,10 @@ async function enviarPropuestaDiseno(id) {
             );
         }
 
-        alert(
-            'Propuesta de mano de obra enviada correctamente.'
-        );
+        mostrarNotificacion('Propuesta de mano de obra enviada correctamente.', {
+            tipo: 'exito',
+            titulo: 'Propuesta enviada'
+        });
 
         vistaDetalleCotizacionDiseno.classList.add(
             'view-hidden'
@@ -5435,10 +5665,10 @@ async function enviarPropuestaDiseno(id) {
             error
         );
 
-        alert(
-            error.message ||
-            'No se pudo enviar la propuesta.'
-        );
+        mostrarNotificacion(error.message || 'No se pudo enviar la propuesta.', {
+            tipo: 'error',
+            titulo: 'No se pudo enviar la propuesta'
+        });
     }
 }
 
@@ -5831,5 +6061,3 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
 });
-
-    

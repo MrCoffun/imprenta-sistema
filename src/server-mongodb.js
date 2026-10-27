@@ -32,6 +32,51 @@ app.use(
 
 const bcrypt = require('bcryptjs');
 
+// Normalizar nombres de cuenta sin alterar los datos personales del usuario.
+function normalizarNombreUsuario(valor) {
+    return String(valor || '').trim().toLocaleLowerCase('es-PE');
+}
+
+// Inicializar el contador por encima de los IDs que ya existen en MongoDB.
+async function inicializarContadorUsuarios() {
+    const ultimoUsuario = await Usuario.findOne()
+        .sort({ id_usuario: -1 })
+        .select('id_usuario')
+        .lean();
+
+    const secuenciaActual = Number(ultimoUsuario?.id_usuario || 0);
+
+    try {
+        await Contador.updateOne(
+            { _id: 'usuario' },
+            { $max: { secuencia: secuenciaActual } },
+            { upsert: true }
+        );
+    } catch (error) {
+        // Si dos instancias inician a la vez, la primera puede crear el contador.
+        if (error.code !== 11000) throw error;
+
+        await Contador.updateOne(
+            { _id: 'usuario' },
+            { $max: { secuencia: secuenciaActual } }
+        );
+    }
+}
+
+async function obtenerSiguienteIdUsuario() {
+    const contador = await Contador.findOneAndUpdate(
+        { _id: 'usuario' },
+        { $inc: { secuencia: 1 } },
+        { new: true }
+    ).lean();
+
+    if (!contador) {
+        throw new Error('El contador de usuarios no está inicializado');
+    }
+
+    return contador.secuencia;
+}
+
 
 // ==========================================
 // MODELO - LOGS DE ÓRDENES DE TRABAJO
@@ -72,7 +117,9 @@ app.post('/api/login', async (req, res) => {
         }
 
         const user = await Usuario.findOne({
-            usuario: usuario.trim()
+            $expr: {
+                $eq: [{ $toLower: '$usuario' }, normalizarNombreUsuario(usuario)]
+            }
         }).select('+contraseña');
 
         if (!user || !user.estado) {
@@ -111,17 +158,23 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-app.get('/api/perfil', (req, res) => {
+app.get('/api/perfil', async (req, res) => {
+    try {
+        const usuario = await obtenerCuentaSesionActiva(req, res);
+        if (!usuario) return;
 
-    if (!req.session.user) {
-        return res.status(401).json({
-            error: 'No hay una sesión activa'
-        });
+        req.session.user = {
+            id: usuario.id_usuario,
+            nombre: `${usuario.nombres} ${usuario.apellidos}`,
+            usuario: usuario.usuario,
+            rol: usuario.rol
+        };
+
+        res.json({ usuario: req.session.user });
+    } catch (error) {
+        console.error('❌ Error consultando el perfil:', error);
+        res.status(500).json({ error: 'No se pudo consultar el perfil' });
     }
-
-    res.json({
-        usuario: req.session.user
-    });
 });
 
 app.post('/api/logout', (req, res) => {
@@ -144,42 +197,67 @@ app.post('/api/logout', (req, res) => {
     });
 });
 
-function auth(req, res, next) {
-
-    if (!req.session.user) {
-        return res.status(401).json({
-            error: 'Debes iniciar sesión'
-        });
+async function obtenerCuentaSesionActiva(req, res) {
+    if (!req.session?.user) {
+        res.status(401).json({ error: 'Debes iniciar sesión' });
+        return null;
     }
 
-    next();
+    const idUsuario = Number(req.session.user.id);
+    const usuario = Number.isSafeInteger(idUsuario)
+        ? await Usuario.findOne({ id_usuario: idUsuario })
+            .select('id_usuario nombres apellidos usuario rol estado')
+            .lean()
+        : null;
+
+    if (!usuario || usuario.estado !== true) {
+        // Una cuenta desactivada no debe conservar acceso con una sesión abierta.
+        req.session.destroy(error => {
+            if (error) console.error('❌ Error invalidando sesión inactiva:', error);
+        });
+        res.clearCookie('connect.sid');
+        res.status(401).json({
+            error: 'La cuenta está desactivada o ya no existe. Inicia sesión con una cuenta activa.'
+        });
+        return null;
+    }
+
+    return usuario;
+}
+
+async function auth(req, res, next) {
+    try {
+        const usuario = await obtenerCuentaSesionActiva(req, res);
+        if (!usuario) return;
+        next();
+    } catch (error) {
+        console.error('❌ Error validando la sesión:', error);
+        res.status(500).json({ error: 'No se pudo validar la sesión' });
+    }
 }
 
 function permitirRoles(...rolesPermitidos) {
+    return async (req, res, next) => {
+        try {
+            const usuario = await obtenerCuentaSesionActiva(req, res);
+            if (!usuario) return;
 
-    return (req, res, next) => {
+            // Usar el rol vigente de la base de datos en las solicitudes protegidas.
+            const rolUsuario = usuario.rol.toLowerCase();
+            const rolesNormalizados = rolesPermitidos.map(rol => rol.toLowerCase());
 
-        if (!req.session.user) {
-            return res.status(401).json({
-                error: 'Debes iniciar sesión'
-            });
+            if (!rolesNormalizados.includes(rolUsuario)) {
+                return res.status(403).json({
+                    error: 'No tienes permisos para realizar esta acción'
+                });
+            }
+
+            req.session.user.rol = usuario.rol;
+            next();
+        } catch (error) {
+            console.error('❌ Error verificando permisos:', error);
+            res.status(500).json({ error: 'No se pudieron verificar los permisos' });
         }
-
-        const rolUsuario =
-            req.session.user.rol.toLowerCase();
-
-        const rolesNormalizados =
-            rolesPermitidos.map(rol =>
-                rol.toLowerCase()
-            );
-
-        if (!rolesNormalizados.includes(rolUsuario)) {
-            return res.status(403).json({
-                error: 'No tienes permisos para realizar esta acción'
-            });
-        }
-
-        next();
     };
 }
 
@@ -190,6 +268,127 @@ app.get('/api/protegida', auth, (req, res) => {
         usuario: req.session.user
     });
 
+});
+
+// ==========================================
+// ADMINISTRACIÓN DE CUENTAS
+// ==========================================
+
+app.get('/api/usuarios', permitirRoles('administrador'), async (req, res) => {
+    try {
+        const usuarios = await Usuario.find()
+            .select('id_usuario nombres apellidos usuario rol estado')
+            .sort({ nombres: 1, apellidos: 1, id_usuario: 1 })
+            .lean();
+
+        res.json({ usuarios, usuarioActualId: req.session.user.id });
+    } catch (error) {
+        console.error('❌ Error consultando usuarios:', error);
+        res.status(500).json({ error: 'No se pudo obtener la lista de usuarios' });
+    }
+});
+
+app.post('/api/usuarios', permitirRoles('administrador'), async (req, res) => {
+    try {
+        const datos = req.body;
+        if (!datos || typeof datos !== 'object' || Array.isArray(datos) ||
+            ['nombres', 'apellidos', 'usuario', 'contraseña', 'rol']
+                .some(campo => typeof datos[campo] !== 'string')) {
+            return res.status(400).json({ error: 'Completa los datos de la cuenta' });
+        }
+
+        const nombres = datos.nombres.trim();
+        const apellidos = datos.apellidos.trim();
+        const nombreUsuario = normalizarNombreUsuario(datos.usuario);
+        const contraseña = datos.contraseña;
+        const rol = datos.rol.trim().toLowerCase();
+        const rolesPermitidos = ['cotizador', 'diseñador', 'maquinista'];
+
+        if (!nombres || nombres.length > 100 || !apellidos || apellidos.length > 100 ||
+            !nombreUsuario || nombreUsuario.length > 50 || !rolesPermitidos.includes(rol)) {
+            return res.status(400).json({ error: 'Revisa los datos y selecciona un rol permitido' });
+        }
+        if (contraseña.length < 8 || Buffer.byteLength(contraseña, 'utf8') > 72) {
+            return res.status(400).json({
+                error: 'La contraseña debe tener al menos 8 caracteres y no superar 72 bytes'
+            });
+        }
+
+        const existente = await Usuario.findOne({
+            $expr: {
+                $eq: [{ $toLower: '$usuario' }, nombreUsuario]
+            }
+        }).select('id_usuario').lean();
+
+        if (existente) {
+            return res.status(409).json({ error: 'Ese nombre de usuario ya está registrado' });
+        }
+
+        const contraseñaHash = await bcrypt.hash(contraseña, 10);
+        const idUsuario = await obtenerSiguienteIdUsuario();
+
+        await Usuario.create({
+            id_usuario: idUsuario,
+            nombres,
+            apellidos,
+            usuario: nombreUsuario,
+            contraseña: contraseñaHash,
+            rol,
+            estado: true
+        });
+
+        res.status(201).json({
+            mensaje: 'Cuenta creada correctamente',
+            id_usuario: idUsuario
+        });
+    } catch (error) {
+        if (error.code === 11000) {
+            return res.status(409).json({ error: 'Ese nombre de usuario ya está registrado' });
+        }
+        console.error('❌ Error creando usuario:', error);
+        res.status(500).json({ error: 'No se pudo crear la cuenta' });
+    }
+});
+
+app.patch('/api/usuarios/:id/estado', permitirRoles('administrador'), async (req, res) => {
+    try {
+        const idTexto = req.params.id;
+        const idUsuario = Number(idTexto);
+        const activo = req.body?.activo;
+
+        if (!/^[1-9]\d*$/.test(idTexto) || !Number.isSafeInteger(idUsuario) ||
+            typeof activo !== 'boolean') {
+            return res.status(400).json({ error: 'Indica una cuenta y un estado válidos' });
+        }
+
+        const usuario = await Usuario.findOneAndUpdate(
+            { id_usuario: idUsuario },
+            { $set: { estado: activo } },
+            { new: true }
+        ).select('id_usuario estado').lean();
+
+        if (!usuario) {
+            return res.status(404).json({ error: 'La cuenta no existe' });
+        }
+
+        const sesionCerrada = !activo && Number(req.session.user.id) === idUsuario;
+        const mensaje = activo
+            ? 'Cuenta reactivada correctamente'
+            : 'Cuenta desactivada correctamente';
+
+        if (sesionCerrada) {
+            return req.session.destroy(error => {
+                if (error) console.error('❌ Error cerrando la sesión desactivada:', error);
+                res.clearCookie('connect.sid');
+                res.json({ mensaje, sesionCerrada: true });
+            });
+        }
+
+        res.json({ mensaje, sesionCerrada: false });
+    } catch (error) {
+        console.error('❌ Error actualizando estado de usuario:', error);
+        res.status(500).json({ error: 'No se pudo actualizar el estado de la cuenta' });
+    }
 });
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -2873,6 +3072,8 @@ INICIAR SERVIDOR
 async function iniciarServidor() {
     try {
         await conectarMongoDB();
+
+        await inicializarContadorUsuarios();
 
         await actualizarPrioridades();
 
