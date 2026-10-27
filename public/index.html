@@ -18,7 +18,9 @@
 
 <body>
 
-    <div id="loginView" class="login-view">
+    <div id="cargaSesion" class="carga-sesion" role="status" aria-label="Comprobando sesión" aria-live="polite"></div>
+
+    <div id="loginView" class="login-view" style="display: none;">
 
     <div class="login-card">
 
@@ -73,7 +75,7 @@
 
 </div>
 
-<div class="app" id="appSistema">
+<div class="app" id="appSistema" style="display: none;">
 
     <!-- =========================
          SIDEBAR
@@ -97,6 +99,11 @@
     <button class="menu-item" data-view="usuarios" id="btnMenuUsuarios" type="button">
         <span>👤</span>
         Usuarios
+    </button>
+
+    <button class="menu-item" data-view="clientes">
+        <span>👥</span>
+        Clientes
     </button>
 
     <!-- COTIZACIONES -->
@@ -151,11 +158,6 @@
     </div>
 
 </div>
-
-    <button class="menu-item" data-view="clientes">
-        <span>👥</span>
-        Clientes
-    </button>
 
             <!-- ÓRDENES DE TRABAJO -->
 
@@ -398,7 +400,7 @@
 
                             <div>
                                 <strong>Base de datos</strong>
-                                <small>SQLite funcionando</small>
+                                <small>MongoDB</small>
                             </div>
 
                         </div>
@@ -2480,7 +2482,7 @@
 <!-- Un solo cuadro superior para avisos, resultados y confirmaciones. -->
 <div
     id="modalConfirmacion"
-    class="modal fade modal-confirmacion"
+    class="modal modal-confirmacion"
     tabindex="-1"
     aria-labelledby="tituloConfirmacion"
     aria-describedby="mensajeConfirmacion"
@@ -2517,8 +2519,9 @@
     </div>
 </div>
 
-<!-- Orden de carga: Bootstrap, notificaciones compartidas y lógica de la aplicación. -->
+<!-- La página puede comenzar a funcionar mientras termina de cargar Bootstrap. -->
 <script
+    async
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
     integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
     crossorigin="anonymous">

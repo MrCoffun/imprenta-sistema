@@ -32,6 +32,11 @@ const usuarioSchema = new mongoose.Schema({
     estado: {
         type: Boolean,
         default: true
+    },
+    // Ayuda a cerrar las sesiones antiguas al desactivar una cuenta.
+    version_sesion: {
+        type: Number,
+        default: 0
     }
 }, {
     collection: 'usuarios',

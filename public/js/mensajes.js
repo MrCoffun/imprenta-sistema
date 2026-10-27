@@ -34,12 +34,6 @@ function mostrarNotificacion(mensaje, opciones = {}) {
 function confirmarAccion(mensaje, opciones = {}) {
     // Una doble pulsación no debe enviar dos solicitudes al servidor.
     if (confirmacionPendiente) return Promise.resolve(false);
-    if (!window.bootstrap?.Modal) {
-        mostrarNotificacion('Actualiza la página e inténtalo de nuevo.', {
-            tipo:'error', titulo:'No se pudo abrir la confirmación'
-        });
-        return Promise.resolve(false);
-    }
     confirmacionPendiente = true;
     return encolarMensaje(mensaje, {...opciones, tipo:'confirmacion'}, true);
 }
@@ -73,13 +67,13 @@ function mostrarSiguienteMensaje() {
         componenteMensaje = bootstrap.Modal.getOrCreateInstance(elementosMensaje.cuadro);
         componenteMensaje.show();
     } else {
-        // Si falla el CDN, los avisos conservan el mismo cuadro y botón de cierre.
-        // Las operaciones que necesitan confirmación ya quedaron bloqueadas arriba.
+        // Si Bootstrap no carga, usar el mismo cuadro para confirmar o cancelar.
         overflowAnterior = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
         fondoRespaldo = document.createElement('div');
-        fondoRespaldo.className = 'modal-backdrop show';
+        fondoRespaldo.className = 'mensaje-fondo-respaldo';
         document.body.appendChild(fondoRespaldo);
+        elementosMensaje.cuadro.dataset.modo = 'respaldo';
         elementosMensaje.cuadro.style.display = 'block';
         elementosMensaje.cuadro.classList.add('show');
         elementosMensaje.cuadro.removeAttribute('aria-hidden');
@@ -111,6 +105,7 @@ function cerrarMensaje(aceptado) {
         elementosMensaje.cuadro.setAttribute('aria-hidden', 'true');
         elementosMensaje.cuadro.removeAttribute('aria-modal');
         elementosMensaje.cuadro.removeAttribute('role');
+        delete elementosMensaje.cuadro.dataset.modo;
         fondoRespaldo.remove();
         fondoRespaldo = null;
         document.body.style.overflow = overflowAnterior;
@@ -125,7 +120,10 @@ function finalizarMensaje() {
     if (!terminado) return;
     mensajeActivo = null;
     if (terminado.esConfirmacion) confirmacionPendiente = false;
-    if (terminado.origen?.isConnected) terminado.origen.focus();
+    // Devolver el foco sin mover la pantalla y solo si el elemento sigue visible.
+    if (terminado.origen?.isConnected && terminado.origen.getClientRects().length) {
+        terminado.origen.focus({preventScroll:true});
+    }
     terminado.resolve(terminado.aceptado && !terminado.descartar);
     // Los mensajes concurrentes usan este mismo elemento, uno por uno.
     mostrarSiguienteMensaje();
@@ -153,12 +151,16 @@ elementosMensaje.cuadro.addEventListener('hide.bs.modal', () => {
 });
 elementosMensaje.cuadro.addEventListener('hidden.bs.modal', finalizarMensaje);
 elementosMensaje.cuadro.addEventListener('keydown', evento => {
-    // Bootstrap controla Escape y el foco; esto cubre únicamente el modo de respaldo.
+    // Mantener el teclado dentro del cuadro cuando Bootstrap no esté disponible.
     if (!fondoRespaldo) return;
     if (evento.key === 'Escape') cerrarMensaje(false);
     if (evento.key === 'Tab') {
-        const botones = [elementosMensaje.cerrar, elementosMensaje.aceptar];
-        const primero = botones[0], ultimo = botones[1];
+        const botones = [
+            elementosMensaje.cerrar,
+            ...(elementosMensaje.cancelar.hidden ? [] : [elementosMensaje.cancelar]),
+            elementosMensaje.aceptar
+        ].filter(boton => !boton.disabled);
+        const primero = botones[0], ultimo = botones[botones.length - 1];
         if (evento.shiftKey && document.activeElement === primero) {
             evento.preventDefault(); ultimo.focus();
         } else if (!evento.shiftKey && document.activeElement === ultimo) {

@@ -9,6 +9,7 @@ const OrdenTrabajo = require('./models/OrdenTrabajo');
 const Contador = require('./models/Contador');
 const Diseno = require('./models/Diseno');
 const mongoose = require('mongoose');
+const crearConfiguracionSesion = require('./configuracion-sesion');
 
 const path = require('path');
 
@@ -16,19 +17,10 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-app.use(
-    session({
-        secret: 'imprenta-sistema-2026',
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-            httpOnly: true,
-            sameSite: 'lax',
-            secure: false,
-            maxAge: 8 * 60 * 60 * 1000
-        }
-    })
-);
+const configuracionSesion = crearConfiguracionSesion();
+// Permite reconocer que la página publicada usa una conexión segura.
+if (configuracionSesion.confiarProxy) app.set('trust proxy', 1);
+app.use(session(configuracionSesion.opciones));
 
 const bcrypt = require('bcryptjs');
 
@@ -116,6 +108,13 @@ app.post('/api/login', async (req, res) => {
             });
         }
 
+        // Rechazar contraseñas demasiado largas antes de compararlas.
+        if (typeof contraseña !== 'string' || Buffer.byteLength(contraseña, 'utf8') > 72) {
+            return res.status(401).json({
+                error: 'Usuario o contraseña incorrectos'
+            });
+        }
+
         const user = await Usuario.findOne({
             $expr: {
                 $eq: [{ $toLower: '$usuario' }, normalizarNombreUsuario(usuario)]
@@ -137,12 +136,24 @@ app.post('/api/login', async (req, res) => {
             });
         }
 
+        // Crear una sesión nueva para que la anterior deje de servir.
+        await new Promise((resolve, reject) => {
+            req.session.regenerate(error => error ? reject(error) : resolve());
+        });
+
+        // Recordar qué sesiones son válidas para esta cuenta.
+        req.session.versionSesion = user.version_sesion ?? 0;
         req.session.user = {
             id: user.id_usuario,
             nombre: `${user.nombres} ${user.apellidos}`,
             usuario: user.usuario,
             rol: user.rol
         };
+
+        // Guardar la sesión antes de informar que el ingreso fue correcto.
+        await new Promise((resolve, reject) => {
+            req.session.save(error => error ? reject(error) : resolve());
+        });
 
         res.json({
             mensaje: 'Inicio de sesión correcto',
@@ -206,18 +217,24 @@ async function obtenerCuentaSesionActiva(req, res) {
     const idUsuario = Number(req.session.user.id);
     const usuario = Number.isSafeInteger(idUsuario)
         ? await Usuario.findOne({ id_usuario: idUsuario })
-            .select('id_usuario nombres apellidos usuario rol estado')
+            .select('id_usuario nombres apellidos usuario rol estado version_sesion')
             .lean()
         : null;
 
-    if (!usuario || usuario.estado !== true) {
-        // Una cuenta desactivada no debe conservar acceso con una sesión abierta.
+    const versionCuenta = usuario?.version_sesion ?? 0;
+    const versionSesion = req.session.versionSesion ?? 0;
+
+    if (!usuario || usuario.estado !== true ||
+        !Number.isSafeInteger(versionCuenta) || versionCuenta < 0 ||
+        !Number.isSafeInteger(versionSesion) || versionSesion < 0 ||
+        versionCuenta !== versionSesion) {
+        // Cerrar el acceso si la cuenta o la sesión ya no están activas.
         req.session.destroy(error => {
             if (error) console.error('❌ Error invalidando sesión inactiva:', error);
         });
         res.clearCookie('connect.sid');
         res.status(401).json({
-            error: 'La cuenta está desactivada o ya no existe. Inicia sesión con una cuenta activa.'
+            error: 'La sesión ya no está activa. Inicia sesión de nuevo.'
         });
         return null;
     }
@@ -361,9 +378,14 @@ app.patch('/api/usuarios/:id/estado', permitirRoles('administrador'), async (req
             return res.status(400).json({ error: 'Indica una cuenta y un estado válidos' });
         }
 
+        // Al desactivar, las sesiones abiertas dejan de ser válidas.
+        const cambios = activo
+            ? { $set: { estado: true } }
+            : { $set: { estado: false }, $inc: { version_sesion: 1 } };
+
         const usuario = await Usuario.findOneAndUpdate(
             { id_usuario: idUsuario },
-            { $set: { estado: activo } },
+            cambios,
             { new: true }
         ).select('id_usuario estado').lean();
 
@@ -1063,7 +1085,8 @@ app.get('/api/cotizaciones/diseno-pendientes',
                 'tamaño material cantidad fecha_requerida ' +
                 'hora_requerida costos -_id'
             )
-            .sort({ fecha_creacion: 1 })
+            // Mostrar primero las cotizaciones registradas más recientemente.
+            .sort({ id_cotizacion: -1 })
             .lean();
 
             const resultado = cotizaciones.map(c => ({
@@ -1188,7 +1211,8 @@ app.get('/api/cotizaciones/pendientes-aprobacion',
                     }
                 },
                 { $unwind: '$clienteDatos' },
-                { $sort: { fecha_creacion: 1 } },
+                // Mostrar primero las propuestas enviadas o actualizadas recientemente.
+                { $sort: { 'costos.fecha_actualizacion': -1, id_cotizacion: -1 } },
                 {
                     $project: {
                         _id: 0,
@@ -1863,7 +1887,8 @@ app.get('/api/ordenes-trabajo/historial-disenador',
                 },
                 {
                     $sort: {
-                        fecha_actualizacion: -1
+                        fecha_actualizacion: -1,
+                        id_ot: -1
                     }
                 },
                 {
@@ -2066,7 +2091,8 @@ app.get('/api/ordenes-trabajo/historial-maquinista',
                 },
                 {
                     $sort: {
-                        fecha_actualizacion: -1
+                        fecha_actualizacion: -1,
+                        id_ot: -1
                     }
                 },
                 {
@@ -2224,9 +2250,10 @@ app.get('/api/ordenes-trabajo',
                 $unwind: '$clienteDatos'
             },
             {
-                $sort: {
-                    id_ot: 1
-                }
+                // En el historial, mostrar primero las órdenes finalizadas recientemente.
+                $sort: estado === 'Finalizada'
+                    ? { fecha_actualizacion: -1, id_ot: -1 }
+                    : { id_ot: 1 }
             },
             {
                 $facet: {

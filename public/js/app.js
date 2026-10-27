@@ -3,6 +3,7 @@ console.log('✅ Interfaz web cargada correctamente.');
 
 const loginView = document.getElementById('loginView');
 const appSistema = document.getElementById('appSistema');
+const cargaSesion = document.getElementById('cargaSesion');
 const formLogin = document.getElementById('formLogin');
 const loginError = document.getElementById('loginError');
 const btnCerrarSesion = document.getElementById('btnCerrarSesion');
@@ -28,8 +29,9 @@ async function comprobarSesion() {
         const datos =
             await respuesta.json();
 
+        // Usar los datos que ya se consultaron al abrir el sistema.
+        await cargarPerfil(datos.usuario);
         mostrarSistema(datos.usuario);
-        await cargarPerfil();
 
     } catch {
 
@@ -42,6 +44,7 @@ function mostrarLogin() {
     limpiarNotificaciones();
     loginView.style.display = 'flex';
     appSistema.style.display = 'none';
+    cargaSesion.hidden = true;
 
 }
 
@@ -55,6 +58,8 @@ function mostrarSistema(usuario) {
 
     document.getElementById('usuarioRol').textContent =
         `Rol: ${usuario.rol}`;
+
+    cargaSesion.hidden = true;
 
 }
 
@@ -97,9 +102,9 @@ formLogin?.addEventListener('submit', async (e) => {
 
         sessionStorage.removeItem('vistaActual');
 
+        // Preparar el menú antes de mostrar el sistema y evitar una pantalla intermedia.
+        await cargarPerfil(datos.usuario);
         mostrarSistema(datos.usuario);
-
-        await cargarPerfil();
 
         // Confirmar el ingreso únicamente después de validar las credenciales.
         mostrarNotificacion('Has iniciado sesión correctamente.', {
@@ -155,8 +160,6 @@ btnCerrarSesion?.addEventListener('click', async () => {
         cierreSesionEnCurso = false;
     }
 });
-
-comprobarSesion();
 
 // ==========================================
 // ELEMENTOS
@@ -811,25 +814,28 @@ selectCantidad?.addEventListener(
 // PERFIL DEL USUARIO
 // ==========================================
 
-async function cargarPerfil() {
+async function cargarPerfil(usuarioActual = null) {
 
     try {
 
-        const respuesta =
-            await fetch('/api/perfil');
+        let usuario = usuarioActual;
 
-        const datos =
-            await respuesta.json();
+        if (!usuario) {
+            const respuesta = await fetch('/api/perfil');
+            const datos = await respuesta.json();
 
-        if (!respuesta.ok) {
-            throw new Error(
-                datos.error ||
-                'No se pudo obtener el perfil'
-            );
+            if (!respuesta.ok) {
+                throw new Error(
+                    datos.error ||
+                    'No se pudo obtener el perfil'
+                );
+            }
+
+            usuario = datos.usuario;
         }
 
         rolUsuario =
-            datos.usuario.rol.toLowerCase();
+            usuario.rol.toLowerCase();
 
         console.log(
             '👤 Rol del usuario:',
@@ -898,8 +904,6 @@ async function cargarPerfil() {
         }
 
         mostrarVista(vistaInicial);
-
-            mostrarVista(vistaInicial);
     } catch (error) {
 
         console.error(
@@ -6029,35 +6033,4 @@ async function cargarHistorialRechazadas() {
 // RESTAURAR SESIÓN AL RECARGAR
 // ==========================================
 
-window.addEventListener('DOMContentLoaded', async () => {
-
-    try {
-
-        const respuesta =
-            await fetch('/api/perfil');
-
-        if (!respuesta.ok) {
-            return;
-        }
-
-        const datos =
-            await respuesta.json();
-
-        if (!datos.usuario) {
-            return;
-        }
-
-        mostrarSistema(datos.usuario);
-
-        await cargarPerfil();
-
-    } catch (error) {
-
-        console.error(
-            '❌ No se pudo restaurar la sesión:',
-            error
-        );
-
-    }
-
-});
+window.addEventListener('DOMContentLoaded', comprobarSesion);
