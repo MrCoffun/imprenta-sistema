@@ -10,6 +10,7 @@ const Contador = require('./models/Contador');
 const Diseno = require('./models/Diseno');
 const mongoose = require('mongoose');
 const crearConfiguracionSesion = require('./configuracion-sesion');
+const comprobarRequisitosAvance = require('./requisitos-avance-ot');
 
 const path = require('path');
 
@@ -295,7 +296,7 @@ app.get('/api/usuarios', permitirRoles('administrador'), async (req, res) => {
     try {
         const usuarios = await Usuario.find()
             .select('id_usuario nombres apellidos usuario rol estado')
-            .sort({ nombres: 1, apellidos: 1, id_usuario: 1 })
+            .sort({ id_usuario: -1 })
             .lean();
 
         res.json({ usuarios, usuarioActualId: req.session.user.id });
@@ -647,7 +648,7 @@ app.get('/api/cotizaciones',
             const offset = (paginaFinal - 1) * porPagina;
 
             const registros = await Cotizacion.find()
-                .sort({ id_cotizacion: 1 })
+                .sort({ id_cotizacion: -1 })
                 .skip(offset)
                 .limit(porPagina)
                 .lean();
@@ -759,7 +760,7 @@ app.get('/api/ordenes-trabajo/:id/disenos',
                 }
             },
             { $unwind: '$ot' },
-            { $sort: { fecha_carga: 1, id_diseño: 1 } },
+            { $sort: { id_diseño: -1 } },
             {
                 $project: {
                     _id: 0,
@@ -1150,7 +1151,7 @@ app.get('/api/cotizaciones/pendientes-disenador',
                     }
                 },
                 { $unwind: '$clienteDatos' },
-                { $sort: { fecha_creacion: 1 } },
+                { $sort: { id_cotizacion: -1 } },
                 {
                     $project: {
                         _id: 0,
@@ -1525,7 +1526,7 @@ app.get('/api/clientes',
                 {},
                 'id_cliente nombre telefono correo -_id'
             )
-                .sort({ nombre: 1, id_cliente: 1 })
+                .sort({ id_cliente: -1 })
                 .skip(offset)
                 .limit(porPagina)
                 .lean();
@@ -1947,7 +1948,8 @@ app.get('/api/cotizaciones/historial/aprobadas',
                 },
                 {
                     $sort: {
-                        fecha_actualizacion: -1
+                        fecha_actualizacion: -1,
+                        id_cotizacion: -1
                     }
                 },
                 {
@@ -2010,7 +2012,8 @@ app.get('/api/cotizaciones/historial/rechazadas',
                 },
                 {
                     $sort: {
-                        fecha_actualizacion: -1
+                        fecha_actualizacion: -1,
+                        id_cotizacion: -1
                     }
                 },
                 {
@@ -2250,10 +2253,10 @@ app.get('/api/ordenes-trabajo',
                 $unwind: '$clienteDatos'
             },
             {
-                // En el historial, mostrar primero las órdenes finalizadas recientemente.
+                // Mostrar primero las órdenes más recientes en cada lista.
                 $sort: estado === 'Finalizada'
                     ? { fecha_actualizacion: -1, id_ot: -1 }
-                    : { id_ot: 1 }
+                    : { id_ot: -1 }
             },
             {
                 $facet: {
@@ -2675,8 +2678,8 @@ app.get('/api/ordenes-trabajo/:id/logs',
             },
             {
                 $sort: {
-                    fecha_hora: 1,
-                    id_logs: 1
+                    fecha_hora: -1,
+                    id_logs: -1
                 }
             },
             {
@@ -2905,7 +2908,7 @@ app.get('/api/ordenes-trabajo/:id/impresiones',
                 id_ot: idOT
             })
             .select('-_id -__v')
-            .sort({ id_impresion: 1 })
+            .sort({ id_impresion: -1 })
             .lean();
 
             res.json({
@@ -3024,6 +3027,18 @@ app.patch('/api/ordenes-trabajo/:id/estado',
                 estado_actual: ot.estado,
                 estado_solicitado: estado_nuevo
             });
+        }
+
+        const requisitoPendiente = await comprobarRequisitosAvance({
+            idOT,
+            estadoActual: ot.estado,
+            estadoNuevo: estado_nuevo,
+            Diseno,
+            Impresion,
+            LogOT
+        });
+        if (requisitoPendiente) {
+            return res.status(400).json({ error: requisitoPendiente });
         }
 
         const estadoAnterior = ot.estado;
