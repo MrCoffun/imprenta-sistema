@@ -863,8 +863,21 @@ button:focus-visible, a:focus-visible { outline: 3px solid #64b8cb; outline-offs
 .submenu-item.active { color: #fff; background: #2a4358; }
 .sidebar-footer { border-color: #2c4053; padding: 22px 24px; }
 .sidebar-footer small { color: #aabdcf; }
-#btnCerrarSesion { color: #dce7ef; background: transparent; border-color: #496174; text-align: center; }
-#btnCerrarSesion:hover { background: #2a4358; }
+/* El botón está sobre el encabezado blanco y necesita contraste visible. */
+#btnCerrarSesion {
+    color: #a32d29;
+    background: #fff;
+    border-color: #a32d29;
+    text-align: center;
+    min-width: 118px;
+    white-space: nowrap;
+}
+#btnCerrarSesion:hover, #btnCerrarSesion:active {
+    color: #fff;
+    background: #a32d29;
+    border-color: #a32d29;
+}
+#btnCerrarSesion:focus-visible { outline: 3px solid #a32d29; outline-offset: 3px; }
 .topbar { padding: 23px 32px; min-height: 96px; border-color: var(--line); gap: 20px; }
 .topbar h2 { font-size: 23px; font-weight: 650; letter-spacing: -.5px; margin-bottom: 3px; }
 .topbar p, .panel-header p { color: var(--muted); }
@@ -891,6 +904,12 @@ button:focus-visible, a:focus-visible { outline: 3px solid #64b8cb; outline-offs
 .primary-button:hover, .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .secondary-button, .btn-secondary { background: #fff; border: 1px solid #ced8e2; color: #354b61; }
 .secondary-button:hover, .btn-secondary:hover { background: #f0f5f8; border-color: #aabcc9; }
+
+/* Botones de páginas en el historial de órdenes. */
+.pagination-button { min-width: 36px; min-height: 36px; padding: 8px 14px; border: 1px solid #ced8e2; border-radius: 5px; background: #fff; color: #354b61; font-size: 13px; font-weight: 600; line-height: 1.4; cursor: pointer; }
+.pagination-button:hover { background: #f0f5f8; border-color: #aabcc9; }
+.pagination-button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pagination-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .danger-button { background: #fff4f3; border: 1px solid #efc8c5; color: #ab3430; }
 .danger-button:hover { background: #ffe8e6; }
 button:disabled { opacity: .5; cursor: not-allowed; }
@@ -931,6 +950,9 @@ td button { margin: 2px 3px 2px 0; white-space: nowrap; }
 .pagination { justify-content: flex-end; font-size: 12px; color: var(--muted); }
 .resultados-clientes { border-color: var(--line); border-radius: 6px; box-shadow: 0 8px 24px #172b3e16; }
 .resultado-cliente:hover { background: #eef7f8; }
+/* Mantener el fondo vacío mientras se comprueba la sesión. */
+.carga-sesion { position: fixed; inset: 0; z-index: 10000; background: #eaf0f4; }
+.carga-sesion[hidden] { display: none; }
 .login-view { background: #eaf0f4; overflow-y: auto; padding: 32px 20px; }
 .login-card { max-width: 440px; padding: 40px; border-radius: 10px; border: 1px solid #d6e0e8; border-top: 4px solid var(--accent); box-shadow: 0 16px 48px #172b3e12; margin: auto; }
 .login-card .logo { padding-bottom: 24px; border-bottom: 1px solid var(--line); margin-bottom: 26px; }
@@ -940,6 +962,73 @@ td button { margin: 2px 3px 2px 0; white-space: nowrap; }
 .login-card input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #176f8218; }
 .login-card button[type='submit'] { background: var(--accent); border-radius: 5px; min-height: 44px; }
 .login-card button[type='submit']:hover { background: var(--accent-hover); }
+
+/* Cuadro Bootstrap compartido para avisos y confirmaciones. */
+.modal-confirmacion {
+    --mensaje-color: #176f82;
+    --mensaje-borde: #d7edf1;
+    position: fixed;
+    inset: 0;
+    display: none;
+    overflow-y: auto;
+    z-index: 1055;
+}
+.modal-confirmacion[data-tipo='exito'] { --mensaje-color: #27804e; --mensaje-borde: #d8efdf; }
+.modal-confirmacion[data-tipo='error'] { --mensaje-color: #a32d29; --mensaje-borde: #f6dedd; }
+.modal-confirmacion[data-tipo='advertencia'] { --mensaje-color: #996316; --mensaje-borde: #f5e9cf; }
+.modal-confirmacion .modal-dialog {
+    width: calc(100% - 32px);
+    max-width: 520px;
+    min-height: 0;
+    margin: clamp(24px, 6vh, 64px) auto 24px;
+    display: flex;
+    align-items: flex-start;
+}
+.modal-confirmacion .modal-content {
+    position: relative;
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: #fff;
+    text-align: center;
+    box-shadow: 0 20px 60px #172b3e33;
+}
+.modal-confirmacion .mensaje-cerrar { position: absolute; top: 18px; right: 18px; z-index: 1; }
+.modal-confirmacion .modal-body { padding: 32px 36px 12px; }
+.confirmacion-icono {
+    display: grid;
+    place-items: center;
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 18px;
+    border: 2px solid var(--mensaje-borde);
+    border-radius: 50%;
+    color: var(--mensaje-color);
+    background: #fff;
+    font-size: 54px;
+    font-weight: 350;
+    line-height: 1;
+}
+.modal-confirmacion .modal-title { margin-bottom: 12px; color: var(--ink); font-size: 24px; font-weight: 650; line-height: 1.25; }
+.modal-confirmacion .modal-body p { color: #65758a; font-size: 16px; line-height: 1.6; white-space: pre-line; overflow-wrap: anywhere; }
+.modal-confirmacion .modal-footer { justify-content: center; gap: 12px; padding: 14px 32px 28px; border: none; }
+.modal-confirmacion .modal-footer .btn { min-width: 112px; min-height: 44px; margin: 0; padding: 10px 24px; border-radius: 6px; font-size: 15px; font-weight: 600; }
+.modal-confirmacion .btn[hidden] { display: none; }
+.modal-confirmacion .btn-primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+.modal-confirmacion .btn-primary:hover, .modal-confirmacion .btn-primary:focus-visible { color: #fff; background: var(--accent-hover); border-color: var(--accent-hover); }
+.modal-confirmacion .btn-outline-secondary { color: #405469; background: #fff; border-color: #9fb0bf; }
+.modal-confirmacion .btn-outline-secondary:hover, .modal-confirmacion .btn-outline-secondary:focus-visible { color: #223247; background: #eef3f7; border-color: #9fb0bf; }
+.modal-backdrop.show { opacity: .42; }
+/* Conservar el cuadro y su fondo cuando Bootstrap no esté disponible. */
+.mensaje-fondo-respaldo { position: fixed; inset: 0; z-index: 1050; background: rgba(0, 0, 0, .42); }
+.modal-confirmacion[data-modo='respaldo'] .modal-footer { display: flex; align-items: center; flex-wrap: wrap; }
+.modal-confirmacion[data-modo='respaldo'] .modal-footer .btn { border-width: 1px; border-style: solid; cursor: pointer; }
+.modal-confirmacion[data-modo='respaldo'] .mensaje-cerrar {
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; padding: 0; border: 0;
+    color: #697b88; background: none; opacity: 1; cursor: pointer;
+}
+.modal-confirmacion[data-modo='respaldo'] .mensaje-cerrar::before { content: '×'; font-size: 26px; line-height: 1; }
 @media (max-width: 1200px) { .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sidebar { width: 235px; } .content { padding: 24px; } }
 @media (max-width: 800px) { .sidebar { width: 205px; } .menu { padding: 16px 8px; } .menu-item { padding: 11px 10px; font-size: 12px; } .topbar { padding: 20px; flex-wrap: wrap; } .content { padding: 20px; } .card { padding: 16px; } .panel { padding: 20px; } .form-grid { grid-template-columns: 1fr; } }
 @media (max-width: 550px) {
