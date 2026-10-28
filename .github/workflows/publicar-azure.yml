@@ -1,0 +1,53 @@
+name: Publicar sistema de imprenta en Azure
+
+on:
+  push:
+    branches:
+      - migracion-mongodb
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publicar-imprenta-azure
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    # La identidad de Azure solo autoriza esta rama.
+    if: github.ref == 'refs/heads/migracion-mongodb'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obtener el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Instalar dependencias y comprobar el avance de órdenes
+        run: |
+          npm ci
+          node --check src/server-mongodb.js
+          node --test tests/requisitos-avance-ot.test.js
+
+      # Incluir solo archivos registrados en Git, sin .env ni node_modules.
+      - name: Preparar archivos de publicación
+        run: git archive --format=zip -o "$RUNNER_TEMP/imprenta.zip" HEAD
+
+      - name: Conectar con Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Publicar en Azure
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: imprenta-sistema-ot
+          package: ${{ runner.temp }}/imprenta.zip
