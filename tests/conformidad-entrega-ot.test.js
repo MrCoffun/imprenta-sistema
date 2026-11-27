@@ -24,7 +24,7 @@ test('D04 y CU-10: la entrega requiere que la orden esté Finalizada y un rol au
 });
 
 test('la entrega es terminal y el historial conserva las órdenes conformes y entregadas', () => {
-    assert.deepEqual(estadosHistorialOT, ['Finalizada', 'Entregada']);
+    assert.deepEqual(estadosHistorialOT, ['Finalizada', 'Finalizada conforme', 'Entregada']);
     for (const estado of estadosOT) {
         assert.equal(permiteCambiarEstadoOT('administrador', 'Entregada', estado), false);
     }
@@ -32,4 +32,11 @@ test('la entrega es terminal y el historial conserva las órdenes conformes y en
     assert.equal(permiteCambiarEstadoOT('cotizador', 'En Revisión', 'En Diseño'), true);
     assert.equal(permiteCambiarEstadoOT('diseñador', 'En Diseño', 'En Impresión'), true);
     assert.equal(permiteCambiarEstadoOT('maquinista', 'En Impresión', 'En Revisión'), true);
+});
+
+test('una orden histórica conforme mantiene su acceso a la entrega', () => {
+    assert.equal(permiteCambiarEstadoOT('cotizador', 'Finalizada conforme', 'Entregada'), true);
+    assert.equal(permiteCambiarEstadoOT('diseñador', 'Finalizada conforme', 'Entregada'), false);
+    assert.equal(permiteCambiarEstadoOT('cotizador', 'Finalizada conforme', 'En Diseño'), false);
+    assert.equal(estadosOT.includes('Finalizada conforme'), false);
 });
