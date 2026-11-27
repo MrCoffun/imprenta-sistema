@@ -3138,14 +3138,18 @@ app.patch('/api/ordenes-trabajo/:id/estado',
         }
 
         const estadoAnterior = ot.estado;
-        const fecha = fechaHoraLima();
+        const versionEstado = ot.version_estado ?? { $exists: false };
         const cambio = 'La OT cambió de ' + estadoAnterior + ' a ' + estado_nuevo;
 
         // Guardar juntos el cambio de estado y su historial, incluida la justificación.
         const actualizada = await mongoose.connection.transaction(async session => {
+            const fecha = fechaHoraLima();
             const resultado = await OrdenTrabajo.updateOne(
-                { id_ot: idOT, estado: estadoAnterior },
-                { $set: { estado: estado_nuevo, fecha_actualizacion: fecha } },
+                { id_ot: idOT, estado: estadoAnterior, version_estado: versionEstado },
+                {
+                    $set: { estado: estado_nuevo, fecha_actualizacion: fecha },
+                    $inc: { version_estado: 1 }
+                },
                 { session }
             );
             if (resultado.modifiedCount !== 1) return false;

@@ -21,6 +21,7 @@ const ordenTrabajoSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    version_estado: Number,
     prioridad: {
         type: String,
         required: true
