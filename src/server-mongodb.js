@@ -638,19 +638,20 @@ async function registrarLog(
     tipoEvento,
     estadoAnterior = null,
     estadoNuevo = null,
-    detalleEvento = null
+    detalleEvento = null,
+    session = null
 ) {
     const contador = await Contador.findOneAndUpdate(
         { _id: 'log_ot' },
         { $inc: { secuencia: 1 } },
-        { returnDocument: 'after', upsert: true }
+        { returnDocument: 'after', upsert: true, session }
     );
 
     if (!contador) {
         throw new Error('Contador de logs no inicializado');
     }
 
-    await LogOT.create({
+    await LogOT.create([{
         id_logs: contador.secuencia,
         id_ot: idOT,
         id_usuario: idUsuario,
@@ -659,6 +660,20 @@ async function registrarLog(
         estado_nuevo: estadoNuevo,
         detalle_evento: detalleEvento,
         fecha_hora: fechaHoraLima()
+    }], { session });
+}
+
+
+// Mantener inseparables la verificación del estado y el registro del trabajo.
+async function guardarTrabajoEnOT(idOT, guardar) {
+    return mongoose.connection.transaction(async session => {
+        const orden = await OrdenTrabajo.updateOne(
+            { id_ot: idOT, estado: { $nin: estadosHistorialOT } },
+            { $inc: { version_estado: 1 } },
+            { session }
+        );
+        if (orden.matchedCount !== 1) return null;
+        return guardar(session);
     });
 }
 
@@ -916,45 +931,31 @@ app.post('/api/ordenes-trabajo/:id/diseno',
             });
         }
 
-        const contadorDiseño = await Contador.findOneAndUpdate(
-            { _id: 'diseno' },
-            { $inc: { secuencia: 1 } },
-            { returnDocument: 'after', upsert: true }
-        );
+        const nuevo = await guardarTrabajoEnOT(idOT, async session => {
+            const contadorDiseño = await Contador.findOneAndUpdate(
+                { _id: 'diseno' },
+                { $inc: { secuencia: 1 } },
+                { returnDocument: 'after', upsert: true, session }
+            );
 
-        if (!contadorDiseño) {
-            throw new Error('Contador de diseños no inicializado');
-        }
+            if (!contadorDiseño) throw new Error('Contador de diseños no inicializado');
 
-        const nuevo = await Diseno.create({
-            id_diseño: contadorDiseño.secuencia,
-            id_ot: idOT,
-            nombre_diseño,
-            descripcion: descripcion || null,
-            archivo_diseño,
-            fecha_carga: fechaHoraLima()
+            const [diseño] = await Diseno.create([{
+                id_diseño: contadorDiseño.secuencia,
+                id_ot: idOT,
+                nombre_diseño,
+                descripcion: descripcion || null,
+                archivo_diseño,
+                fecha_carga: fechaHoraLima()
+            }], { session });
+
+            await registrarLog(idOT, id_usuario, 'DISEÑO_CARGADO', null, null, nombre_diseño + ' - ' + archivo_diseño, session);
+            return diseño;
         });
 
-        const contadorLog = await Contador.findOneAndUpdate(
-            { _id: 'log_ot' },
-            { $inc: { secuencia: 1 } },
-            { returnDocument: 'after', upsert: true }
-        );
-
-        if (!contadorLog) {
-            throw new Error('Contador de logs no inicializado');
+        if (!nuevo) {
+            return res.status(409).json({ error: 'La orden ya está finalizada o entregada y no admite nuevos diseños.' });
         }
-
-        await LogOT.create({
-            id_logs: contadorLog.secuencia,
-            id_ot: idOT,
-            id_usuario,
-            tipo_evento: 'DISEÑO_CARGADO',
-            estado_anterior: null,
-            estado_nuevo: null,
-            detalle_evento: `${nombre_diseño} - ${archivo_diseño}`,
-            fecha_hora: fechaHoraLima()
-        });
 
         res.status(201).json({
             mensaje: 'Diseño registrado correctamente',
@@ -2879,53 +2880,33 @@ app.post('/api/ordenes-trabajo/:id/impresion',
             });
         }
 
-        // Obtener siguiente ID de impresión
-        const contadorImpresion = await Contador.findOneAndUpdate(
-            { _id: 'impresion' },
-            { $inc: { secuencia: 1 } },
-            { returnDocument: 'after', upsert: true }
-        );
+        const nueva = await guardarTrabajoEnOT(idOT, async session => {
+            const contadorImpresion = await Contador.findOneAndUpdate(
+                { _id: 'impresion' },
+                { $inc: { secuencia: 1 } },
+                { returnDocument: 'after', upsert: true, session }
+            );
 
-        if (!contadorImpresion) {
-            throw new Error('Contador de impresiones no inicializado');
-        }
+            if (!contadorImpresion) throw new Error('Contador de impresiones no inicializado');
 
-        const fecha = fechaHoraLima();
+            const [impresion] = await Impresion.create([{
+                id_impresion: contadorImpresion.secuencia,
+                id_ot: idOT,
+                id_diseño: Number(id_diseño),
+                id_usuario,
+                codigo_maquina,
+                cantidad_impresa: unidades,
+                observaciones: observaciones || null,
+                fecha_impresion: fechaHoraLima()
+            }], { session });
 
-        // Registrar impresión
-        const nueva = await Impresion.create({
-            id_impresion: contadorImpresion.secuencia,
-            id_ot: idOT,
-            id_diseño: Number(id_diseño),
-            id_usuario,
-            codigo_maquina,
-            cantidad_impresa: unidades,
-            observaciones: observaciones || null,
-            fecha_impresion: fecha
+            await registrarLog(idOT, id_usuario, 'IMPRESION_REGISTRADA', null, null, unidades + ' unidades - ' + codigo_maquina, session);
+            return impresion;
         });
 
-        // Obtener siguiente ID de log
-        const contadorLog = await Contador.findOneAndUpdate(
-            { _id: 'log_ot' },
-            { $inc: { secuencia: 1 } },
-            { returnDocument: 'after', upsert: true }
-        );
-
-        if (!contadorLog) {
-            throw new Error('Contador de logs no inicializado');
+        if (!nueva) {
+            return res.status(409).json({ error: 'La orden ya está finalizada o entregada y no admite nuevas impresiones.' });
         }
-
-        // Registrar historial
-        await LogOT.create({
-            id_logs: contadorLog.secuencia,
-            id_ot: idOT,
-            id_usuario,
-            tipo_evento: 'IMPRESION_REGISTRADA',
-            estado_anterior: null,
-            estado_nuevo: null,
-            detalle_evento: `${unidades} unidades - ${codigo_maquina}`,
-            fecha_hora: fechaHoraLima()
-        });
 
         res.status(201).json({
             mensaje: 'Impresión registrada correctamente',

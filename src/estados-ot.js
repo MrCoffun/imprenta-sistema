@@ -14,10 +14,11 @@ const transicionesOT = {
 };
 
 const estadosOT = Object.keys(transicionesOT);
-const estadosHistorialOT = ['Finalizada', 'Entregada'];
+const estadosHistorialOT = ['Finalizada', 'Finalizada conforme', 'Entregada'];
 
 function permiteCambiarEstadoOT(rol, estadoActual, estadoNuevo) {
-    const roles = transicionesOT[estadoActual]?.[estadoNuevo];
+    const origen = estadoActual === 'Finalizada conforme' ? 'Finalizada' : estadoActual;
+    const roles = transicionesOT[origen]?.[estadoNuevo];
     return Array.isArray(roles) && roles.includes(rol);
 }
 

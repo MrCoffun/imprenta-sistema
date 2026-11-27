@@ -463,6 +463,7 @@ const pageDescription =
 
 let rolUsuario = null;
 let otActualId = null;
+let cargaDetalleOT = 0;
 let vistaAnteriorOT = 'ordenes';
 let vistaAnteriorCotizacion = 'cotizaciones';
 
@@ -3968,8 +3969,15 @@ async function verOT(id) {
     }
 
     // Oculta TODAS las vistas y muestra solo el detalle
+    const carga = ++cargaDetalleOT;
+    const sigueAbierta = () => carga === cargaDetalleOT && sessionStorage.getItem('vistaActual') === 'detalle-ot';
+    otActualId = null;
+    document.getElementById('accionesEstadoOT').textContent = 'Cargando datos de la orden…';
+    for (const panel of ['detalleOTDiseno', 'detalleOTImpresion', 'tablaLogsOT']) {
+        document.getElementById(panel)?.replaceChildren();
+    }
+    configurarDetalleOTPorRol({});
     mostrarVista('detalle-ot');
-
     try {
 
         const respuestaOT = 
@@ -3978,11 +3986,10 @@ async function verOT(id) {
         if (!respuestaOT.ok) throw new Error('OT no encontrada');
         const ot = await respuestaOT.json();
 
-        otActualId = ot.id_ot;   // ← guardamos la OT abierta
-
         const respuestaCotizacion = await fetchSeguro(`/api/cotizaciones/${ot.id_cotizacion}`);
         if (!respuestaCotizacion.ok) throw new Error('Error al obtener la cotización');
         const cotizacion = await respuestaCotizacion.json();
+        if (!sigueAbierta()) return;
 
 
         // ==========================================
@@ -4004,7 +4011,6 @@ async function verOT(id) {
         document.getElementById('detalleOTHora')
             .textContent = ot.hora_requerida;
 
-            mostrarAccionesEstado(ot);
 
 
         // ==========================================
@@ -4074,7 +4080,8 @@ async function verOT(id) {
 
         const disenos =
             respuestaDisenosData.diseños || [];
-            await cargarDisenosParaImpresion(id);
+        if (!sigueAbierta()) return;
+        cargarDisenosParaImpresion(disenos);
 
         const contenedorDiseno =
             document.getElementById('detalleOTDiseno');
@@ -4131,6 +4138,7 @@ async function verOT(id) {
 
         const respuestaImpresionesData =
             await respuestaImpresiones.json();
+        if (!sigueAbierta()) return;
 
         const impresiones =
             respuestaImpresionesData.impresiones || [];
@@ -4183,7 +4191,7 @@ async function verOT(id) {
 // CONFIGURAR VISTA SEGÚN ROL
 // ==========================================
 
-configurarDetalleOTPorRol(ot);      
+configurarDetalleOTPorRol(ot);
 
 
 // ==========================================
@@ -4205,6 +4213,7 @@ if (rolUsuario === 'administrador') {
 
     const datosLogs =
         await respuestaLogs.json();
+    if (!sigueAbierta()) return;
 
     const logs =
         datosLogs.logs || [];
@@ -4243,7 +4252,11 @@ if (rolUsuario === 'administrador') {
     }
 }
 
+otActualId = ot.id_ot;
+mostrarAccionesEstado(ot);
+
 } catch (error) {
+    if (!sigueAbierta()) return;
 
     console.error(
         '❌ Error cargando detalle de OT:',
@@ -4279,7 +4292,7 @@ function mostrarAccionesEstado(ot) {
     // CONFORMIDAD Y ENTREGA
     // ==========================================
 
-    if (ot.estado === 'Finalizada') {
+    if (['Finalizada', 'Finalizada conforme'].includes(ot.estado)) {
         contenedor.innerHTML = '<p>Trabajo conforme. La entrega está pendiente de registro.</p>';
         if (['administrador', 'cotizador'].includes(rolUsuario)) {
             const botonEntrega = document.createElement('button');
@@ -4822,67 +4835,15 @@ document
 // CARGAR DISEÑOS EN SELECT DE IMPRESIÓN
 // ==========================================
 
-async function cargarDisenosParaImpresion(idOT) {
+function cargarDisenosParaImpresion(disenos) {
+    const selector = document.getElementById('disenoImpresion');
+    if (!selector) return;
 
-    const selector =
-        document.getElementById('disenoImpresion');
-
-    if (!selector) {
-        return;
+    selector.replaceChildren(new Option('Seleccionar diseño', ''));
+    for (const diseno of disenos) {
+        const etiqueta = diseno.nombre_diseño + ' — ' + diseno.archivo_diseño;
+        selector.appendChild(new Option(etiqueta, diseno.id_diseño));
     }
-
-    try {
-
-        const respuesta =
-            await fetchSeguro(
-                `/api/ordenes-trabajo/${idOT}/disenos`
-            );
-
-        if (!respuesta.ok) {
-            throw new Error('No se pudieron obtener los diseños');
-        }
-
-        const datos =
-            await respuesta.json();
-
-        const disenos =
-            datos.diseños || [];
-
-        selector.innerHTML = `
-            <option value="">
-                Seleccionar diseño
-            </option>
-        `;
-
-        disenos.forEach(diseno => {
-
-            const opcion =
-                document.createElement('option');
-
-            opcion.value = diseno.id_diseño;
-
-            opcion.textContent =
-                `${diseno.nombre_diseño} — ${diseno.archivo_diseño}`;
-
-            selector.appendChild(opcion);
-
-        });
-
-    } catch (error) {
-
-        console.error(
-            '❌ Error cargando diseños para impresión:',
-            error
-        );
-
-        selector.innerHTML = `
-            <option value="">
-                No se pudieron cargar los diseños
-            </option>
-        `;
-
-    }
-
 }
 
 // ==========================================
