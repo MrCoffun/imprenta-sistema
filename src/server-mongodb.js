@@ -13,6 +13,7 @@ const Diseno = require('./models/Diseno');
 const mongoose = require('mongoose');
 const crearConfiguracionSesion = require('./configuracion-sesion');
 const { comprobarRequisitosAvance, validarMotivoDevolucion } = require('./requisitos-avance-ot');
+const { estadosOT, estadosHistorialOT, permiteCambiarEstadoOT } = require('./estados-ot');
 const { randomBytes, timingSafeEqual } = require('node:crypto');
 const path = require('path');
 
@@ -581,7 +582,7 @@ function calcularPrioridad(fechaRequerida, horaRequerida) {
 async function actualizarPrioridades() {
     try {
         const ots = await OrdenTrabajo.find({
-            estado: { $ne: 'Finalizada' }
+            estado: { $nin: estadosHistorialOT }
         })
         .select('id_ot codigo_ot fecha_requerida hora_requerida prioridad')
         .lean();
@@ -1943,7 +1944,7 @@ app.get('/api/ordenes-trabajo/historial-disenador',
             const ordenes = await OrdenTrabajo.aggregate([
                 {
                     $match: {
-                        estado: 'Finalizada'
+                        estado: { $in: estadosHistorialOT }
                     }
                 },
                 {
@@ -2149,7 +2150,7 @@ app.get('/api/ordenes-trabajo/historial-maquinista',
             const ordenes = await OrdenTrabajo.aggregate([
                 {
                     $match: {
-                        estado: 'Finalizada'
+                        estado: { $in: estadosHistorialOT }
                     }
                 },
                 {
@@ -2248,6 +2249,7 @@ app.get('/api/ordenes-trabajo',
             req.session.user.rol.toLowerCase();
 
         const condicionesOT = {};
+        const enHistorial = req.query.historial === 'true' && ['administrador', 'cotizador'].includes(rolUsuario);
 
         // ========================================
         // FILTROS POR ROL
@@ -2267,9 +2269,9 @@ app.get('/api/ordenes-trabajo',
 
         } else {
 
-            condicionesOT.estado = estado
-                ? estado
-                : { $nin: ['Finalizada', 'En Revisión'] };
+            condicionesOT.estado = enHistorial
+                ? { $in: estadosHistorialOT }
+                : estado || { $nin: [...estadosHistorialOT, 'En Revisión'] };
         }
 
         if (prioridad) {
@@ -2338,7 +2340,7 @@ app.get('/api/ordenes-trabajo',
             },
             {
                 // Mostrar primero las órdenes más recientes en cada lista.
-                $sort: estado === 'Finalizada'
+                $sort: enHistorial || estadosHistorialOT.includes(estado)
                     ? { fecha_actualizacion: -1, id_ot: -1 }
                     : { id_ot: -1 }
             },
@@ -3041,67 +3043,15 @@ app.patch('/api/ordenes-trabajo/:id/estado',
             });
         }
 
-        const estadosPermitidos = [
-            'Pendiente',
-            'En Diseño',
-            'En Impresión',
-            'En Revisión',
-            'Finalizada'
-        ];
-
-        if (!estado_nuevo || !estadosPermitidos.includes(estado_nuevo)) {
+        if (!estadosOT.includes(estado_nuevo)) {
             return res.status(400).json({
                 error: 'Estado no válido',
                 estado_recibido: estado_nuevo,
-                estados_permitidos: estadosPermitidos
+                estados_permitidos: estadosOT
             });
         }
 
         const rolUsuario = req.session.user.rol.toLowerCase();
-        let transicionValida = false;
-
-        if (rolUsuario === 'administrador') {
-            const siguienteEstado = {
-                'Pendiente': 'En Diseño',
-                'En Diseño': 'En Impresión',
-                'En Impresión': 'En Revisión'
-            };
-
-            if (siguienteEstado[ot.estado] === estado_nuevo) {
-                transicionValida = true;
-            }
-
-            if (
-                ot.estado === 'En Revisión' &&
-                ['Finalizada', 'En Diseño', 'En Impresión'].includes(estado_nuevo)
-            ) {
-                transicionValida = true;
-            }
-        }
-
-        if (rolUsuario === 'diseñador') {
-            if (
-                (ot.estado === 'Pendiente' && estado_nuevo === 'En Diseño') ||
-                (ot.estado === 'En Diseño' && estado_nuevo === 'En Impresión')
-            ) {
-                transicionValida = true;
-            }
-        }
-
-        if (rolUsuario === 'maquinista') {
-            if (ot.estado === 'En Impresión' && estado_nuevo === 'En Revisión') {
-                transicionValida = true;
-            }
-        }
-
-        if (rolUsuario === 'cotizador') {
-            if (
-                ot.estado === 'En Revisión' &&
-                ['Finalizada', 'En Diseño', 'En Impresión'].includes(estado_nuevo)
-            ) {
-                transicionValida = true;
-            }
-        }
 
         if (ot.estado === estado_nuevo) {
             return res.status(400).json({
@@ -3110,7 +3060,7 @@ app.patch('/api/ordenes-trabajo/:id/estado',
             });
         }
 
-        if (!transicionValida) {
+        if (!permiteCambiarEstadoOT(rolUsuario, ot.estado, estado_nuevo)) {
             return res.status(400).json({
                 error: 'Transición de estado no permitida',
                 estado_actual: ot.estado,
@@ -3140,6 +3090,9 @@ app.patch('/api/ordenes-trabajo/:id/estado',
         const estadoAnterior = ot.estado;
         const versionEstado = ot.version_estado ?? { $exists: false };
         const cambio = 'La OT cambió de ' + estadoAnterior + ' a ' + estado_nuevo;
+        let detalle = motivo ? cambio + '. Motivo: ' + motivo : cambio;
+        if (estado_nuevo === 'Finalizada') detalle = 'Conformidad registrada. ' + cambio;
+        if (estado_nuevo === 'Entregada') detalle = 'Entrega al cliente registrada. ' + cambio;
 
         // Guardar juntos el cambio de estado y su historial, incluida la justificación.
         const actualizada = await mongoose.connection.transaction(async session => {
@@ -3171,7 +3124,7 @@ app.patch('/api/ordenes-trabajo/:id/estado',
                 tipo_evento: 'ESTADO_CAMBIADO',
                 estado_anterior: estadoAnterior,
                 estado_nuevo,
-                detalle_evento: motivo ? cambio + '. Motivo: ' + motivo : cambio,
+                detalle_evento: detalle,
                 fecha_hora: fecha
             }], { session });
 
