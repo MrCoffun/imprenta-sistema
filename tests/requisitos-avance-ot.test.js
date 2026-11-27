@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const comprobar = require('../src/requisitos-avance-ot');
+const { comprobarRequisitosAvance: comprobar, validarMotivoDevolucion } = require('../src/requisitos-avance-ot');
 
 function modelos(registros, historial, cantidadSolicitada = 1000) {
     const consulta = resultado => ({ select: () => ({ lean: async () => resultado }) });
@@ -50,6 +50,24 @@ for (const [etapa, siguiente, tipo, evento] of [
         assert.match(await revisar(etapa, siguiente, registros, [devolucion, posterior, { ...devolucion, id_logs: 12 }]), /devuelta/);
     });
 }
+
+for (const [caso, destino] of [['D01', 'En Impresión'], ['D02', 'En Diseño']]) {
+    test(caso + ': la devolución exige un motivo válido', () => {
+        for (const valor of [undefined, null, '', '  \n\t ', 123, {}]) {
+            assert.match(validarMotivoDevolucion('En Revisión', destino, valor).error, /Indica el motivo/);
+        }
+        assert.match(validarMotivoDevolucion('En Revisión', destino, 'a'.repeat(501)).error, /500 caracteres/);
+        const motivo = 'Corregir la inconsistencia de la OT.';
+        assert.deepEqual(validarMotivoDevolucion('En Revisión', destino, '  ' + motivo + '  '), { motivo });
+        assert.equal(validarMotivoDevolucion('En Revisión', destino, 'a'.repeat(500)).motivo.length, 500);
+    });
+}
+
+test('el motivo de devolución solo se exige al regresar desde revisión', () => {
+    assert.deepEqual(validarMotivoDevolucion('En Diseño', 'En Impresión'), {});
+    assert.deepEqual(validarMotivoDevolucion('En Impresión', 'En Revisión'), {});
+    assert.deepEqual(validarMotivoDevolucion('En Revisión', 'Finalizada'), {});
+});
 
 test('las demás transiciones no requieren estos registros', async () => {
     assert.equal(await revisar('Pendiente', 'En Diseño'), null);

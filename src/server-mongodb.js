@@ -12,7 +12,7 @@ const Contador = require('./models/Contador');
 const Diseno = require('./models/Diseno');
 const mongoose = require('mongoose');
 const crearConfiguracionSesion = require('./configuracion-sesion');
-const comprobarRequisitosAvance = require('./requisitos-avance-ot');
+const { comprobarRequisitosAvance, validarMotivoDevolucion } = require('./requisitos-avance-ot');
 const { randomBytes, timingSafeEqual } = require('node:crypto');
 const path = require('path');
 
@@ -3118,6 +3118,11 @@ app.patch('/api/ordenes-trabajo/:id/estado',
             });
         }
 
+        const { motivo, error: errorMotivo } = validarMotivoDevolucion(ot.estado, estado_nuevo, req.body.motivo);
+        if (errorMotivo) {
+            return res.status(400).json({ error: errorMotivo });
+        }
+
         const requisitoPendiente = await comprobarRequisitosAvance({
             idOT,
             idCotizacion: ot.id_cotizacion,
@@ -3134,46 +3139,48 @@ app.patch('/api/ordenes-trabajo/:id/estado',
 
         const estadoAnterior = ot.estado;
         const fecha = fechaHoraLima();
+        const cambio = 'La OT cambió de ' + estadoAnterior + ' a ' + estado_nuevo;
 
-        // Actualización condicional para evitar sobrescribir otro cambio simultáneo
-        const resultado = await OrdenTrabajo.updateOne(
-            { id_ot: idOT, estado: estadoAnterior },
-            {
-                $set: {
-                    estado: estado_nuevo,
-                    fecha_actualizacion: fecha
-                }
+        // Guardar juntos el cambio de estado y su historial, incluida la justificación.
+        const actualizada = await mongoose.connection.transaction(async session => {
+            const resultado = await OrdenTrabajo.updateOne(
+                { id_ot: idOT, estado: estadoAnterior },
+                { $set: { estado: estado_nuevo, fecha_actualizacion: fecha } },
+                { session }
+            );
+            if (resultado.modifiedCount !== 1) return false;
+
+            const contadorLog = await Contador.findOneAndUpdate(
+                { _id: 'log_ot' },
+                { $inc: { secuencia: 1 } },
+                { returnDocument: 'after', upsert: true, session }
+            );
+
+            if (!contadorLog) {
+                throw new Error('Contador de logs no inicializado');
             }
-        );
 
-        if (resultado.modifiedCount !== 1) {
+            await LogOT.create([{
+                id_logs: contadorLog.secuencia,
+                id_ot: idOT,
+                id_usuario,
+                tipo_evento: 'ESTADO_CAMBIADO',
+                estado_anterior: estadoAnterior,
+                estado_nuevo,
+                detalle_evento: motivo ? cambio + '. Motivo: ' + motivo : cambio,
+                fecha_hora: fecha
+            }], { session });
+
+            return true;
+        });
+
+        if (!actualizada) {
             return res.status(400).json({
                 error: 'Transición de estado no permitida',
                 estado_actual: (await OrdenTrabajo.findOne({ id_ot: idOT }).lean())?.estado,
                 estado_solicitado: estado_nuevo
             });
         }
-
-        const contadorLog = await Contador.findOneAndUpdate(
-            { _id: 'log_ot' },
-            { $inc: { secuencia: 1 } },
-            { returnDocument: 'after', upsert: true }
-        );
-
-        if (!contadorLog) {
-            throw new Error('Contador de logs no inicializado');
-        }
-
-        await LogOT.create({
-            id_logs: contadorLog.secuencia,
-            id_ot: idOT,
-            id_usuario,
-            tipo_evento: 'ESTADO_CAMBIADO',
-            estado_anterior: estadoAnterior,
-            estado_nuevo,
-            detalle_evento: `La OT cambió de ${estadoAnterior} a ${estado_nuevo}`,
-            fecha_hora: fechaHoraLima()
-        });
 
         const otActualizada = await OrdenTrabajo.findOne({
             id_ot: idOT
