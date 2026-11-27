@@ -1443,7 +1443,7 @@ function mostrarVista(vista) {
         'Historial de Órdenes de Trabajo';
 
     pageDescription.textContent =
-        'Órdenes de trabajo finalizadas';
+        'Órdenes de trabajo finalizadas y entregadas';
 
     cargarOrdenesHistorial();
 
@@ -1459,7 +1459,7 @@ function mostrarVista(vista) {
         'Historial de mis trabajos';
 
     pageDescription.textContent =
-        'Órdenes de trabajo finalizadas en las que has participado';
+        'Órdenes de trabajo finalizadas y entregadas en las que has participado';
 
     cargarHistorialDisenador();
 
@@ -1475,7 +1475,7 @@ function mostrarVista(vista) {
             'Historial de mis trabajos';
 
         pageDescription.textContent =
-            'Órdenes de trabajo finalizadas en las que has participado';
+            'Órdenes de trabajo finalizadas y entregadas en las que has participado';
 
         cargarHistorialMaquinista();
 
@@ -1618,7 +1618,7 @@ function mostrarVista(vista) {
             tabla.innerHTML = `
                 <tr>
                     <td colspan="5">
-                        No tienes trabajos finalizados registrados.
+                        No tienes trabajos finalizados o entregados registrados.
                     </td>
                 </tr>
             `;
@@ -1728,7 +1728,7 @@ function mostrarVista(vista) {
             tabla.innerHTML = `
                 <tr>
                     <td colspan="5">
-                        No tienes trabajos finalizados registrados.
+                        No tienes trabajos finalizados o entregados registrados.
                     </td>
                 </tr>
             `;
@@ -1846,10 +1846,7 @@ async function cargarOrdenesHistorial(pagina = 1) {
             pagina
         );
 
-        parametros.set(
-            'estado',
-            'Finalizada'
-        );
+        parametros.set('historial', 'true');
 
         if (numeroCotizacion) {
 
@@ -1893,8 +1890,8 @@ async function cargarOrdenesHistorial(pagina = 1) {
 
             tabla.innerHTML = `
                 <tr>
-                    <td colspan="6">
-                        No hay órdenes de trabajo finalizadas.
+                    <td colspan="7">
+                        No hay órdenes de trabajo finalizadas o entregadas.
                     </td>
                 </tr>
             `;
@@ -4279,31 +4276,26 @@ function mostrarAccionesEstado(ot) {
 
 
     // ==========================================
-    // OT FINALIZADA
+    // CONFORMIDAD Y ENTREGA
     // ==========================================
 
     if (ot.estado === 'Finalizada') {
-
-        contenedor.innerHTML = `
-            <div class="status-item">
-
-                <div>
-
-                    <strong>🔒 OT Finalizada</strong>
-
-                    <small>
-                        Esta orden de trabajo ya fue cerrada
-                        y no admite nuevos cambios de estado.
-                    </small>
-
-                </div>
-
-            </div>
-        `;
-
+        contenedor.innerHTML = '<p>Trabajo conforme. La entrega está pendiente de registro.</p>';
+        if (['administrador', 'cotizador'].includes(rolUsuario)) {
+            const botonEntrega = document.createElement('button');
+            botonEntrega.type = 'button';
+            botonEntrega.className = 'primary-button';
+            botonEntrega.textContent = 'Registrar entrega';
+            botonEntrega.addEventListener('click', () => cambiarEstadoOT(ot.id_ot, 'Entregada'));
+            contenedor.appendChild(botonEntrega);
+        }
         return;
     }
 
+    if (ot.estado === 'Entregada') {
+        contenedor.textContent = 'La entrega al cliente quedó registrada.';
+        return;
+    }
 
     // ==========================================
     // ADMINISTRADOR
@@ -4387,7 +4379,7 @@ function mostrarAccionesEstado(ot) {
                         class="primary-button"
                         onclick="cambiarEstadoOT(${ot.id_ot}, 'Finalizada')">
 
-                        Finalizar OT
+                        Registrar conformidad
 
                     </button>
 
@@ -4496,7 +4488,7 @@ function mostrarAccionesEstado(ot) {
                         class="primary-button"
                         onclick="cambiarEstadoOT(${ot.id_ot}, 'Finalizada')">
 
-                        Finalizar OT
+                        Registrar conformidad
 
                     </button>
 
@@ -4527,14 +4519,21 @@ function mostrarAccionesEstado(ot) {
 // ==========================================
 
 async function cambiarEstadoOT(idOT, nuevoEstado, esDevolucion = false) {
-    const confirmacion = await confirmarAccion(
-        esDevolucion
-            ? 'La orden volverá al estado «' + nuevoEstado + '». Registra la inconsistencia que debe corregirse.'
-            : '¿Confirmas cambiar la OT al estado «' + nuevoEstado + '»?',
-        esDevolucion
-            ? { titulo: 'Devolver orden de trabajo', textoConfirmar: 'Confirmar devolución', pedirMotivo: true }
-            : { titulo: 'Cambiar estado de la OT', textoConfirmar: 'Sí, cambiar estado' }
-    );
+    let mensaje = '¿Confirmas cambiar la OT al estado «' + nuevoEstado + '»?';
+    let opciones = { titulo: 'Cambiar estado de la OT', textoConfirmar: 'Sí, cambiar estado' };
+
+    if (esDevolucion) {
+        mensaje = 'La orden volverá al estado «' + nuevoEstado + '». Registra la inconsistencia que debe corregirse.';
+        opciones = { titulo: 'Devolver orden de trabajo', textoConfirmar: 'Confirmar devolución', pedirMotivo: true };
+    } else if (nuevoEstado === 'Finalizada') {
+        mensaje = 'Confirma que revisaste el trabajo y quedó conforme. La OT quedará Finalizada y lista para su entrega.';
+        opciones = { titulo: 'Registrar conformidad', textoConfirmar: 'Confirmar conformidad' };
+    } else if (nuevoEstado === 'Entregada') {
+        mensaje = 'Confirma que entregaste el trabajo al cliente. La OT quedará Entregada.';
+        opciones = { titulo: 'Registrar entrega', textoConfirmar: 'Confirmar entrega' };
+    }
+
+    const confirmacion = await confirmarAccion(mensaje, opciones);
 
     if (confirmacion === false) {
         return;
@@ -4578,11 +4577,15 @@ async function cambiarEstadoOT(idOT, nuevoEstado, esDevolucion = false) {
 
 
         // ==========================================
-        // SI ESTÁBAMOS EN "EN REVISIÓN"
+        // DEVOLUCIONES Y CAMBIOS QUE VUELVEN AL LISTADO
         // ==========================================
 
+        if (nuevoEstado === 'Finalizada' || nuevoEstado === 'Entregada') {
+            await verOT(idOT);
+            return;
+        }
+
         if (
-            nuevoEstado === 'Finalizada' ||
             nuevoEstado === 'En Diseño' ||
             nuevoEstado === 'En Impresión'
         ) {
