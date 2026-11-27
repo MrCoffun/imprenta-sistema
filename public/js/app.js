@@ -14,13 +14,48 @@ let cierreSesionEnCurso = false;
 
 console.log('🔎 Botón Nueva cotización:', btnNuevaCotizacion);
 
+// Solicitudes HTTP protegidas mediante token CSRF
+async function fetchSeguro(url, opciones = {}) {
+    const metodo = (opciones.method || 'GET').toUpperCase();
+
+    if (['GET', 'HEAD', 'OPTIONS'].includes(metodo)) {
+        return fetch(url, opciones);
+    }
+
+    const destino = new URL(url, window.location.href);
+
+    if (destino.origin !== window.location.origin) {
+        throw new Error('Destino de solicitud no permitido');
+    }
+
+    const respuestaToken = await fetch('/api/csrf-token', {
+        credentials: 'same-origin',
+        cache: 'no-store'
+    });
+
+    if (!respuestaToken.ok) {
+        throw new Error('No se pudo obtener el token de seguridad');
+    }
+
+    const { csrfToken } = await respuestaToken.json();
+
+    const cabeceras = new Headers(opciones.headers || {});
+    cabeceras.set('X-CSRF-Token', csrfToken);
+
+    return fetch(url, {
+        ...opciones,
+        credentials: 'same-origin',
+        headers: cabeceras
+    });
+}
+
 
 async function comprobarSesion() {
 
     try {
 
         const respuesta =
-            await fetch('/api/perfil');
+            await fetchSeguro('/api/perfil');
 
         if (!respuesta.ok) {
             throw new Error('No hay sesión');
@@ -78,7 +113,7 @@ formLogin?.addEventListener('submit', async (e) => {
     try {
 
         const respuesta =
-            await fetch('/api/login', {
+            await fetchSeguro('/api/login', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -135,7 +170,7 @@ btnCerrarSesion?.addEventListener('click', async () => {
         if (!confirmado) return;
 
         btnCerrarSesion.disabled = true;
-        const respuesta = await fetch('/api/logout', {
+        const respuesta = await fetchSeguro('/api/logout', {
             method: 'POST'
         });
 
@@ -184,7 +219,7 @@ async function cargarUsuarios() {
     tablaUsuarios.innerHTML = '<tr><td colspan="5">Cargando usuarios...</td></tr>';
 
     try {
-        const respuesta = await fetch('/api/usuarios');
+        const respuesta = await fetchSeguro('/api/usuarios');
         const datos = await respuesta.json();
 
         if (respuesta.status === 401) {
@@ -244,7 +279,7 @@ formNuevoUsuario?.addEventListener('submit', async evento => {
     btnGuardarUsuario.disabled = true;
 
     try {
-        const respuesta = await fetch('/api/usuarios', {
+        const respuesta = await fetchSeguro('/api/usuarios', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -303,7 +338,7 @@ tablaUsuarios?.addEventListener('click', async evento => {
         });
         if (!confirmado) return;
 
-        const respuesta = await fetch(
+        const respuesta = await fetchSeguro(
             `/api/usuarios/${encodeURIComponent(boton.dataset.id)}/estado`,
             {
                 method: 'PATCH',
@@ -473,7 +508,7 @@ async function cargarTarifasCotizacion() {
     try {
 
         const respuesta =
-            await fetch('/api/tarifas');
+            await fetchSeguro('/api/tarifas');
 
         const tarifas =
             await respuesta.json();
@@ -821,7 +856,7 @@ async function cargarPerfil(usuarioActual = null) {
         let usuario = usuarioActual;
 
         if (!usuario) {
-            const respuesta = await fetch('/api/perfil');
+            const respuesta = await fetchSeguro('/api/perfil');
             const datos = await respuesta.json();
 
             if (!respuesta.ok) {
@@ -1557,7 +1592,7 @@ function mostrarVista(vista) {
     try {
 
         const respuesta =
-            await fetch(
+            await fetchSeguro(
                 '/api/ordenes-trabajo/historial-disenador'
             );
 
@@ -1669,7 +1704,7 @@ function mostrarVista(vista) {
     try {
 
         const respuesta =
-            await fetch(
+            await fetchSeguro(
                 '/api/ordenes-trabajo/historial-maquinista'
             );
 
@@ -1835,7 +1870,7 @@ async function cargarOrdenesHistorial(pagina = 1) {
         }
 
         const respuesta =
-            await fetch(
+            await fetchSeguro(
                 `/api/ordenes-trabajo?${parametros.toString()}`
             );
 
@@ -1988,7 +2023,7 @@ async function cargarDashboard() {
     try {
 
         const respuesta =
-            await fetch('/api/dashboard');
+            await fetchSeguro('/api/dashboard');
 
         const datos =
             await respuesta.json();
@@ -2053,7 +2088,7 @@ async function cargarCotizaciones(pagina = 1) {
     try {
 
         const respuesta =
-            await fetch(`/api/cotizaciones?pagina=${pagina}`);
+            await fetchSeguro(`/api/cotizaciones?pagina=${pagina}`);
 
         const datos =
             await respuesta.json();
@@ -2324,7 +2359,7 @@ async function cargarCotizaciones(pagina = 1) {
      try {
 
          const respuesta =
-             await fetch(`/api/clientes?pagina=${pagina}`);
+             await fetchSeguro(`/api/clientes?pagina=${pagina}`);
 
          const datos =
              await respuesta.json();
@@ -2612,7 +2647,7 @@ formNuevoCliente?.addEventListener(
         try {
 
             const respuesta =
-                await fetch(
+                await fetchSeguro(
                     '/api/clientes',
                     {
                         method: 'POST',
@@ -2737,7 +2772,7 @@ async function cargarOrdenes(pagina = 1) {
         }
 
         const respuesta =
-            await fetch(
+            await fetchSeguro(
                 `/api/ordenes-trabajo?${parametros.toString()}`
             );
 
@@ -2999,7 +3034,7 @@ async function cargarOrdenesRevision(pagina = 1) {
     try {
 
         const respuesta =
-            await fetch(
+            await fetchSeguro(
                 `/api/ordenes-trabajo?pagina=${pagina}&estado=En%20Revisión`
             );
 
@@ -3277,7 +3312,7 @@ async function verCotizacion(id) {
     try {
 
         const respuesta =
-            await fetch(`/api/cotizaciones/${id}`);
+            await fetchSeguro(`/api/cotizaciones/${id}`);
 
 
         const cotizacion =
@@ -3673,7 +3708,7 @@ async function verCotizacionAprobacion(id) {
                     try {
 
                         const respuesta =
-                            await fetch(
+                            await fetchSeguro(
                                 `/api/cotizaciones/${id}/modificar-mano-obra`,
                                 {
                                     method: 'PATCH',
@@ -3744,7 +3779,7 @@ async function aprobarCotizacion(id) {
 
     try {
 
-        const respuesta = await fetch(
+        const respuesta = await fetchSeguro(
             `/api/cotizaciones/${id}/aprobar`,
             {
                 method: 'PATCH'
@@ -3802,7 +3837,7 @@ async function rechazarCotizacion(id) {
 
     try {
 
-        const respuesta = await fetch(
+        const respuesta = await fetchSeguro(
             `/api/cotizaciones/${id}/rechazar`,
             {
                 method: 'PATCH'
@@ -3941,14 +3976,14 @@ async function verOT(id) {
     try {
 
         const respuestaOT = 
-            await fetch(`/api/ordenes-trabajo/${id}`
+            await fetchSeguro(`/api/ordenes-trabajo/${id}`
             );
         if (!respuestaOT.ok) throw new Error('OT no encontrada');
         const ot = await respuestaOT.json();
 
         otActualId = ot.id_ot;   // ← guardamos la OT abierta
 
-        const respuestaCotizacion = await fetch(`/api/cotizaciones/${ot.id_cotizacion}`);
+        const respuestaCotizacion = await fetchSeguro(`/api/cotizaciones/${ot.id_cotizacion}`);
         if (!respuestaCotizacion.ok) throw new Error('Error al obtener la cotización');
         const cotizacion = await respuestaCotizacion.json();
 
@@ -4029,7 +4064,7 @@ async function verOT(id) {
         // ==========================================
 
         const respuestaDisenos =
-            await fetch(
+            await fetchSeguro(
                 `/api/ordenes-trabajo/${id}/disenos`
             );
 
@@ -4089,7 +4124,7 @@ async function verOT(id) {
         // ==========================================
 
         const respuestaImpresiones =
-            await fetch(
+            await fetchSeguro(
                 `/api/ordenes-trabajo/${id}/impresiones`
             );
 
@@ -4165,7 +4200,7 @@ const tablaLogs =
 if (rolUsuario === 'administrador') {
 
     const respuestaLogs =
-        await fetch(`/api/ordenes-trabajo/${id}/logs`);
+        await fetchSeguro(`/api/ordenes-trabajo/${id}/logs`);
 
     if (!respuestaLogs.ok) {
         throw new Error('Error al obtener historial');
@@ -4507,7 +4542,7 @@ async function cambiarEstadoOT(idOT, nuevoEstado) {
         console.log('🔎 ID OT:', idOT);
         console.log('🔎 Nuevo estado:', nuevoEstado);
 
-        const respuesta = await fetch(
+        const respuesta = await fetchSeguro(
             `/api/ordenes-trabajo/${idOT}/estado`,
             {
                 method: 'PATCH',
@@ -4610,7 +4645,7 @@ document
                 document.getElementById('descripcionDiseno').value.trim();
 
             const respuesta =
-                await fetch(`/api/ordenes-trabajo/${otActualId}/diseno`,
+                await fetchSeguro(`/api/ordenes-trabajo/${otActualId}/diseno`,
                     {
                         method: 'POST',
 
@@ -4718,7 +4753,7 @@ document
             }
 
             const respuesta =
-                await fetch(
+                await fetchSeguro(
                     `/api/ordenes-trabajo/${otActualId}/impresion`,
                     {
                         method: 'POST',
@@ -4792,7 +4827,7 @@ async function cargarDisenosParaImpresion(idOT) {
     try {
 
         const respuesta =
-            await fetch(
+            await fetchSeguro(
                 `/api/ordenes-trabajo/${idOT}/disenos`
             );
 
@@ -5008,7 +5043,7 @@ const datosCotizacion = {
 
 
             const respuesta =
-                await fetch(
+                await fetchSeguro(
                     '/api/cotizaciones',
                     {
                         method: 'POST',
@@ -5127,7 +5162,7 @@ async function cargarClientesParaCotizacion() {
     try {
 
         const respuesta =
-            await fetch('/api/clientes?pagina=1&porPagina=100');
+            await fetchSeguro('/api/clientes?pagina=1&porPagina=100');
 
         const datos =
             await respuesta.json();
@@ -5312,7 +5347,7 @@ async function cargarCotizacionesDiseno() {
     try {
 
         const respuesta =
-            await fetch('/api/cotizaciones/diseno-pendientes');
+            await fetchSeguro('/api/cotizaciones/diseno-pendientes');
 
         const cotizaciones =
             await respuesta.json();
@@ -5398,7 +5433,7 @@ async function abrirCotizacionDiseno(id) {
     try {
 
         const respuesta =
-            await fetch(`/api/cotizaciones/${id}`);
+            await fetchSeguro(`/api/cotizaciones/${id}`);
 
         const cotizacion =
             await respuesta.json();
@@ -5622,7 +5657,7 @@ async function enviarPropuestaDiseno(id) {
         }
 
         const respuesta =
-            await fetch(
+            await fetchSeguro(
                 `/api/cotizaciones/${id}/propuesta-diseno`,
                 {
                     method: 'PUT',
@@ -5681,7 +5716,7 @@ async function cargarCotizacionesPendientesDisenador() {
     try {
 
         const respuesta =
-            await fetch(
+            await fetchSeguro(
                 '/api/cotizaciones/pendientes-disenador'
             );
 
@@ -5758,7 +5793,7 @@ async function cargarCotizacionesPendientesAprobacion() {
     try {
 
         const respuesta =
-            await fetch(
+            await fetchSeguro(
                 '/api/cotizaciones/pendientes-aprobacion'
             );
 
@@ -5853,7 +5888,7 @@ async function cargarHistorialAprobadas() {
     try {
 
         const respuesta =
-            await fetch(
+            await fetchSeguro(
                 '/api/cotizaciones/historial/aprobadas'
             );
 
@@ -5944,7 +5979,7 @@ async function cargarHistorialRechazadas() {
     try {
 
         const respuesta =
-            await fetch(
+            await fetchSeguro(
                 '/api/cotizaciones/historial/rechazadas'
             );
 

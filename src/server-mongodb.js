@@ -1,4 +1,6 @@
 const express = require('express');
+const { rateLimit } = require('express-rate-limit');
+const helmet = require('helmet');
 const session = require('express-session');
 const conectarMongoDB = require('./mongodb');
 const Usuario = require('./models/Usuario');
@@ -11,17 +13,87 @@ const Diseno = require('./models/Diseno');
 const mongoose = require('mongoose');
 const crearConfiguracionSesion = require('./configuracion-sesion');
 const comprobarRequisitosAvance = require('./requisitos-avance-ot');
-
+const { randomBytes, timingSafeEqual } = require('node:crypto');
 const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Cabeceras HTTP de seguridad
+app.use(helmet({
+    contentSecurityPolicy: {
+        reportOnly: false,
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "https://cdn.jsdelivr.net"],
+            scriptSrcAttr: ["'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+            imgSrc: ["'self'", "data:"],
+            connectSrc: ["'self'"],
+            objectSrc: ["'none'"],
+            frameAncestors: ["'self'"],
+            upgradeInsecureRequests: null
+        }
+    },
+    strictTransportSecurity: process.env.NODE_ENV === 'production'
+}));
 
 app.use(express.json());
 const configuracionSesion = crearConfiguracionSesion();
 // Permite reconocer que la página publicada usa una conexión segura.
 if (configuracionSesion.confiarProxy) app.set('trust proxy', 1);
 app.use(session(configuracionSesion.opciones));
+
+// Generación de tokens CSRF asociados a la sesión
+app.get('/api/csrf-token', (req, res) => {
+    if (!req.session.csrfToken) {
+        req.session.csrfToken = randomBytes(32).toString('hex');
+    }
+
+    res.set('Cache-Control', 'no-store');
+
+    res.json({
+        csrfToken: req.session.csrfToken
+    });
+});
+
+// Protección de solicitudes que modifican información
+app.use('/api', (req, res, next) => {
+    const metodosSeguros = ['GET', 'HEAD', 'OPTIONS'];
+
+    if (metodosSeguros.includes(req.method)) {
+        return next();
+    }
+
+    const tokenSesion = req.session.csrfToken;
+    const tokenRecibido = req.get('X-CSRF-Token');
+
+    if (
+        typeof tokenSesion !== 'string' ||
+        typeof tokenRecibido !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(tokenSesion) ||
+        !/^[a-f0-9]{64}$/.test(tokenRecibido)
+    ) {
+        return res.status(403).json({
+            error: 'Token CSRF ausente o inválido',
+            codigo: 'CSRF_INVALIDO'
+        });
+    }
+
+    const tokenValido = timingSafeEqual(
+        Buffer.from(tokenSesion, 'hex'),
+        Buffer.from(tokenRecibido, 'hex')
+    );
+
+    if (!tokenValido) {
+        return res.status(403).json({
+            error: 'Token CSRF inválido',
+            codigo: 'CSRF_INVALIDO'
+        });
+    }
+
+    next();
+});
 
 const bcrypt = require('bcryptjs');
 
@@ -94,12 +166,24 @@ const LogOT = mongoose.model(
     )
 );
 
+// Protección contra intentos excesivos de autenticación
+const limitadorLogin = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    skipSuccessfulRequests: true,
+    message: {
+        error: 'Demasiados intentos de inicio de sesión. Intente nuevamente en 15 minutos.'
+    }
+});
+
 // ==========================================
 // USUARIOS DE PRUEBA POR ROL
 // ==========================================
 
 
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', limitadorLogin, async (req, res) => {
     try {
         const { usuario, contraseña } = req.body;
 
