@@ -2849,6 +2849,11 @@ app.post('/api/ordenes-trabajo/:id/impresion',
             });
         }
 
+        const unidades = typeof cantidad_impresa === 'string' ? Number(cantidad_impresa) : cantidad_impresa;
+        if (!Number.isSafeInteger(unidades) || unidades <= 0) {
+            return res.status(400).json({ error: 'La cantidad impresa debe ser un número entero mayor que cero.' });
+        }
+
         // Verificar que el diseño pertenezca a esta OT
         const diseño = await Diseno.findOne({
             id_diseño: Number(id_diseño),
@@ -2892,7 +2897,7 @@ app.post('/api/ordenes-trabajo/:id/impresion',
             id_diseño: Number(id_diseño),
             id_usuario,
             codigo_maquina,
-            cantidad_impresa,
+            cantidad_impresa: unidades,
             observaciones: observaciones || null,
             fecha_impresion: fecha
         });
@@ -2916,7 +2921,7 @@ app.post('/api/ordenes-trabajo/:id/impresion',
             tipo_evento: 'IMPRESION_REGISTRADA',
             estado_anterior: null,
             estado_nuevo: null,
-            detalle_evento: `${cantidad_impresa} unidades - ${codigo_maquina}`,
+            detalle_evento: `${unidades} unidades - ${codigo_maquina}`,
             fecha_hora: fechaHoraLima()
         });
 
@@ -3115,6 +3120,8 @@ app.patch('/api/ordenes-trabajo/:id/estado',
 
         const requisitoPendiente = await comprobarRequisitosAvance({
             idOT,
+            idCotizacion: ot.id_cotizacion,
+            Cotizacion,
             estadoActual: ot.estado,
             estadoNuevo: estado_nuevo,
             Diseno,

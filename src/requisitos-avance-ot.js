@@ -1,16 +1,45 @@
+// Una orden puede imprimirse en varias tiradas antes de pasar a revisión.
+async function comprobarTirada({ idOT, idCotizacion, Cotizacion, Impresion }) {
+    const [cotizacion, tiradas] = await Promise.all([
+        Cotizacion.findOne({ id_cotizacion: idCotizacion }).select('cantidad -_id').lean(),
+        Impresion.find({ id_ot: idOT }).select('cantidad_impresa -_id').lean()
+    ]);
+    if (tiradas.length === 0) {
+        return 'Registra una impresión en esta orden antes de continuar.';
+    }
+    const solicitadas = cotizacion?.cantidad;
+    if (!Number.isSafeInteger(solicitadas) || solicitadas <= 0) {
+        return 'No se pudo comprobar la cantidad solicitada en la cotización de esta orden.';
+    }
+
+    let impresas = 0;
+    for (const { cantidad_impresa } of tiradas) {
+        if (!Number.isSafeInteger(cantidad_impresa) || cantidad_impresa <= 0) {
+            return 'Revisa las cantidades de los registros de impresión de esta orden antes de continuar.';
+        }
+        impresas += cantidad_impresa;
+    }
+    if (impresas < solicitadas) {
+        return `Impresión incompleta: se registraron ${impresas} de ${solicitadas} unidades. Faltan ${solicitadas - impresas} para enviar la orden a revisión.`;
+    }
+    return null;
+}
+
 // Comprobar el trabajo registrado antes de avanzar una orden.
-async function comprobarRequisitosAvance({ idOT, estadoActual, estadoNuevo, Diseno, Impresion, LogOT }) {
+async function comprobarRequisitosAvance({ idOT, idCotizacion, estadoActual, estadoNuevo, Diseno, Impresion, Cotizacion, LogOT }) {
     const requisitos = estadoActual === 'En Diseño' && estadoNuevo === 'En Impresión'
-        ? { modelo: Diseno, evento: 'DISEÑO_CARGADO', nombre: 'diseño' }
+        ? { evento: 'DISEÑO_CARGADO', nombre: 'diseño' }
         : estadoActual === 'En Impresión' && estadoNuevo === 'En Revisión'
-            ? { modelo: Impresion, evento: 'IMPRESION_REGISTRADA', nombre: 'impresión' }
+            ? { evento: 'IMPRESION_REGISTRADA', nombre: 'impresión' }
             : null;
 
     if (!requisitos) return null;
 
-    const registro = await requisitos.modelo.exists({ id_ot: idOT });
-    if (!registro) {
-        return `Registra ${requisitos.nombre === 'diseño' ? 'un diseño' : 'una impresión'} en esta orden antes de continuar.`;
+    if (estadoActual === 'En Impresión') {
+        const problema = await comprobarTirada({ idOT, idCotizacion, Cotizacion, Impresion });
+        if (problema) return problema;
+    } else if (!await Diseno.exists({ id_ot: idOT })) {
+        return 'Registra un diseño en esta orden antes de continuar.';
     }
 
     // Si la orden volvió para corregirse, el trabajo debe registrarse de nuevo.

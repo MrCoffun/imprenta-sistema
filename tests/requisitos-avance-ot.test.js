@@ -2,7 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const comprobar = require('../src/requisitos-avance-ot');
 
-function modelos(registros, historial) {
+function modelos(registros, historial, cantidadSolicitada = 1000) {
+    const consulta = resultado => ({ select: () => ({ lean: async () => resultado }) });
     const existe = tipo => ({ exists: async ({ id_ot }) => registros.some(r => r.tipo === tipo && r.id_ot === id_ot) });
     const coincide = (log, filtro) => Object.entries(filtro).every(([campo, valor]) =>
         campo === 'id_logs' ? log.id_logs > valor.$gt
@@ -10,7 +11,12 @@ function modelos(registros, historial) {
                 : log[campo] === valor);
     return {
         Diseno: existe('diseño'),
-        Impresion: existe('impresión'),
+        Impresion: {
+            find: ({ id_ot }) => consulta(registros.filter(r => r.tipo === 'impresión' && r.id_ot === id_ot))
+        },
+        Cotizacion: {
+            findOne: ({ id_cotizacion }) => consulta(id_cotizacion === 12 ? { cantidad: cantidadSolicitada } : null)
+        },
         LogOT: {
             findOne: filtro => ({ sort: () => ({ lean: async () =>
                 historial.filter(log => coincide(log, filtro)).sort((a, b) => b.id_logs - a.id_logs)[0] || null }) }),
@@ -19,8 +25,8 @@ function modelos(registros, historial) {
     };
 }
 
-async function revisar(actual, siguiente, registros = [], historial = []) {
-    return comprobar({ idOT: 7, estadoActual: actual, estadoNuevo: siguiente, ...modelos(registros, historial) });
+async function revisar(actual, siguiente, registros = [], historial = [], cantidadSolicitada = 1000) {
+    return comprobar({ idOT: 7, idCotizacion: 12, estadoActual: actual, estadoNuevo: siguiente, ...modelos(registros, historial, cantidadSolicitada) });
 }
 
 for (const [etapa, siguiente, tipo, evento] of [
@@ -30,11 +36,11 @@ for (const [etapa, siguiente, tipo, evento] of [
     test(`${tipo}: requiere un registro de la misma orden`, async () => {
         assert.match(await revisar(etapa, siguiente), /Registra/);
         assert.match(await revisar(etapa, siguiente, [{ tipo, id_ot: 8 }]), /Registra/);
-        assert.equal(await revisar(etapa, siguiente, [{ tipo, id_ot: 7 }]), null);
+        assert.equal(await revisar(etapa, siguiente, [{ tipo, id_ot: 7, cantidad_impresa: 1000 }]), null);
     });
 
     test(`${tipo}: exige una corrección posterior a la última devolución`, async () => {
-        const registros = [{ tipo, id_ot: 7 }];
+        const registros = [{ tipo, id_ot: 7, cantidad_impresa: 1000 }];
         const devolucion = { id_ot: 7, id_logs: 10, tipo_evento: 'ESTADO_CAMBIADO', estado_anterior: 'En Revisión', estado_nuevo: etapa };
         const anterior = { id_ot: 7, id_logs: 9, tipo_evento: evento };
         const posterior = { id_ot: 7, id_logs: 11, tipo_evento: evento };
@@ -53,7 +59,7 @@ test('las demás transiciones no requieren estos registros', async () => {
 });
 
 test('si la orden vuelve a Diseño, también exige una nueva impresión', async () => {
-    const registros = [{ tipo: 'impresión', id_ot: 7 }];
+    const registros = [{ tipo: 'impresión', id_ot: 7, cantidad_impresa: 1000 }];
     const historial = [
         { id_ot: 7, id_logs: 4, tipo_evento: 'IMPRESION_REGISTRADA' },
         { id_ot: 7, id_logs: 5, tipo_evento: 'ESTADO_CAMBIADO', estado_anterior: 'En Revisión', estado_nuevo: 'En Diseño' },
@@ -64,4 +70,22 @@ test('si la orden vuelve a Diseño, también exige una nueva impresión', async 
     assert.match(await revisar('En Impresión', 'En Revisión', registros, historial), /devuelta/);
     historial.push({ id_ot: 7, id_logs: 8, tipo_evento: 'IMPRESION_REGISTRADA' });
     assert.equal(await revisar('En Impresión', 'En Revisión', registros, historial), null);
+});
+
+test('D06: acumula las tiradas de la misma OT y no suma unidades de otra orden', async () => {
+    const tiradas = [
+        { tipo: 'impresión', id_ot: 7, cantidad_impresa: 100 },
+        { tipo: 'impresión', id_ot: 8, cantidad_impresa: 900 }
+    ];
+    assert.match(await revisar('En Impresión', 'En Revisión', tiradas), /100 de 1000 unidades\. Faltan 900/);
+    tiradas.push({ tipo: 'impresión', id_ot: 7, cantidad_impresa: 900 });
+    assert.equal(await revisar('En Impresión', 'En Revisión', tiradas), null);
+});
+
+test('D06: una cantidad inválida de la cotización o la impresión impide el avance', async () => {
+    const tiradas = [{ tipo: 'impresión', id_ot: 7, cantidad_impresa: 1000 }];
+    assert.match(await revisar('En Impresión', 'En Revisión', tiradas, [], null), /cantidad solicitada/);
+    for (const cantidad_impresa of [0, -10, 0.5, null]) {
+        assert.match(await revisar('En Impresión', 'En Revisión', [{ ...tiradas[0], cantidad_impresa }]), /cantidades/);
+    }
 });
