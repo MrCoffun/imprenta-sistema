@@ -84,4 +84,18 @@ async function comprobarRequisitosAvance({ idOT, idCotizacion, estadoActual, est
     return null;
 }
 
-module.exports = comprobarRequisitosAvance;
+function validarMotivoDevolucion(estadoActual, estadoNuevo, valor) {
+    if (estadoActual !== 'En Revisión' || !['En Diseño', 'En Impresión'].includes(estadoNuevo)) {
+        return {};
+    }
+    const motivo = typeof valor === 'string' ? valor.trim() : '';
+    if (!motivo) {
+        return { error: 'Indica el motivo de la devolución. La orden permanece En Revisión.' };
+    }
+    if (motivo.length > 500) {
+        return { error: 'El motivo de la devolución debe tener como máximo 500 caracteres.' };
+    }
+    return { motivo };
+}
+
+module.exports = { comprobarRequisitosAvance, validarMotivoDevolucion };

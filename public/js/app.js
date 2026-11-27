@@ -4224,17 +4224,17 @@ if (rolUsuario === 'administrador') {
 
     } else {
 
-        tablaLogs.innerHTML =
-            logs.map(log => `
-                <tr>
-                    <td>${log.fecha_hora || ''}</td>
-                    <td>${log.usuario || ''}</td>
-                    <td>${log.tipo_evento || ''}</td>
-                    <td>${log.estado_anterior || '-'}</td>
-                    <td>${log.estado_nuevo || '-'}</td>
-                    <td>${log.detalle_evento || '-'}</td>
-                </tr>
-            `).join('');
+        tablaLogs.replaceChildren(...logs.map(log => {
+            const fila = document.createElement('tr');
+            const columnas = [
+                log.fecha_hora || '', log.usuario || '', log.tipo_evento || '',
+                log.estado_anterior || '-', log.estado_nuevo || '-', log.detalle_evento || '-'
+            ];
+            for (const valor of columnas) {
+                fila.insertCell().textContent = valor;
+            }
+            return fila;
+        }));
     }
 
 } else {
@@ -4367,7 +4367,7 @@ function mostrarAccionesEstado(ot) {
 
                     <button
                         class="secondary-button"
-                        onclick="cambiarEstadoOT(${ot.id_ot}, 'En Diseño')">
+                        onclick="cambiarEstadoOT(${ot.id_ot}, 'En Diseño', true)">
 
                         Corregir diseño
 
@@ -4376,7 +4376,7 @@ function mostrarAccionesEstado(ot) {
 
                     <button
                         class="secondary-button"
-                        onclick="cambiarEstadoOT(${ot.id_ot}, 'En Impresión')">
+                        onclick="cambiarEstadoOT(${ot.id_ot}, 'En Impresión', true)">
 
                         Corregir impresión
 
@@ -4476,7 +4476,7 @@ function mostrarAccionesEstado(ot) {
 
                     <button
                         class="secondary-button"
-                        onclick="cambiarEstadoOT(${ot.id_ot}, 'En Diseño')">
+                        onclick="cambiarEstadoOT(${ot.id_ot}, 'En Diseño', true)">
 
                         Corregir diseño
 
@@ -4485,7 +4485,7 @@ function mostrarAccionesEstado(ot) {
 
                     <button
                         class="secondary-button"
-                        onclick="cambiarEstadoOT(${ot.id_ot}, 'En Impresión')">
+                        onclick="cambiarEstadoOT(${ot.id_ot}, 'En Impresión', true)">
 
                         Corregir impresión
 
@@ -4526,16 +4526,22 @@ function mostrarAccionesEstado(ot) {
 // CAMBIAR ESTADO DE OT
 // ==========================================
 
-async function cambiarEstadoOT(idOT, nuevoEstado) {
-
-    const confirmar = await confirmarAccion(
-        `¿Confirmas cambiar la OT al estado "${nuevoEstado}"?`,
-        { titulo: 'Cambiar estado de la OT', textoConfirmar: 'Sí, cambiar estado' }
+async function cambiarEstadoOT(idOT, nuevoEstado, esDevolucion = false) {
+    const confirmacion = await confirmarAccion(
+        esDevolucion
+            ? 'La orden volverá al estado «' + nuevoEstado + '». Registra la inconsistencia que debe corregirse.'
+            : '¿Confirmas cambiar la OT al estado «' + nuevoEstado + '»?',
+        esDevolucion
+            ? { titulo: 'Devolver orden de trabajo', textoConfirmar: 'Confirmar devolución', pedirMotivo: true }
+            : { titulo: 'Cambiar estado de la OT', textoConfirmar: 'Sí, cambiar estado' }
     );
 
-    if (!confirmar) {
+    if (confirmacion === false) {
         return;
     }
+
+    const cambio = { estado_nuevo: nuevoEstado };
+    if (esDevolucion) cambio.motivo = confirmacion;
 
     try {
 
@@ -4551,9 +4557,7 @@ async function cambiarEstadoOT(idOT, nuevoEstado) {
                     'Content-Type': 'application/json'
                 },
 
-                body: JSON.stringify({
-                    estado_nuevo: nuevoEstado
-                })
+                body: JSON.stringify(cambio)
             }
         );
 

@@ -5,6 +5,8 @@ const elementosMensaje = {
     cuadro: document.getElementById('modalConfirmacion'),
     titulo: document.getElementById('tituloConfirmacion'),
     texto: document.getElementById('mensajeConfirmacion'),
+    campoMotivo: document.getElementById('campoMotivoConfirmacion'),
+    motivo: document.getElementById('motivoConfirmacion'),
     icono: document.getElementById('iconoConfirmacion'),
     aceptar: document.getElementById('btnConfirmarAccion'),
     cancelar: document.getElementById('btnCancelarConfirmacion'),
@@ -59,6 +61,8 @@ function mostrarSiguienteMensaje() {
     elementosMensaje.cuadro.dataset.tipo = opciones.tipo;
     elementosMensaje.cuadro.dataset.confirmacion = String(esConfirmacion);
     elementosMensaje.cancelar.hidden = !esConfirmacion;
+    elementosMensaje.campoMotivo.hidden = !opciones.pedirMotivo;
+    elementosMensaje.motivo.value = '';
     elementosMensaje.aceptar.textContent = esConfirmacion
         ? (opciones.textoConfirmar || 'Confirmar') : 'Aceptar';
     elementosMensaje.aceptar.disabled = true;
@@ -91,13 +95,20 @@ function prepararMensajeVisible() {
         return;
     }
     elementosMensaje.aceptar.disabled = false;
-    (mensajeActivo.esConfirmacion ? elementosMensaje.cancelar : elementosMensaje.aceptar).focus();
+    if (mensajeActivo.opciones.pedirMotivo) {
+        elementosMensaje.motivo.focus();
+    } else {
+        (mensajeActivo.esConfirmacion ? elementosMensaje.cancelar : elementosMensaje.aceptar).focus();
+    }
 }
 
 function cerrarMensaje(aceptado) {
     if (!mensajeActivo || !mensajeActivo.listo || mensajeActivo.cerrando) return;
     mensajeActivo.cerrando = true;
     mensajeActivo.aceptado = aceptado && !mensajeActivo.descartar;
+    if (mensajeActivo.aceptado && mensajeActivo.opciones.pedirMotivo) {
+        mensajeActivo.motivo = elementosMensaje.motivo.value;
+    }
     elementosMensaje.aceptar.disabled = true;
     if (fondoRespaldo) {
         elementosMensaje.cuadro.style.display = 'none';
@@ -124,7 +135,8 @@ function finalizarMensaje() {
     if (terminado.origen?.isConnected && terminado.origen.getClientRects().length) {
         terminado.origen.focus({preventScroll:true});
     }
-    terminado.resolve(terminado.aceptado && !terminado.descartar);
+    const aceptado = terminado.aceptado && !terminado.descartar;
+    terminado.resolve(aceptado && terminado.opciones.pedirMotivo ? terminado.motivo : aceptado);
     // Los mensajes concurrentes usan este mismo elemento, uno por uno.
     mostrarSiguienteMensaje();
 }
@@ -157,6 +169,7 @@ elementosMensaje.cuadro.addEventListener('keydown', evento => {
     if (evento.key === 'Tab') {
         const botones = [
             elementosMensaje.cerrar,
+            ...(elementosMensaje.campoMotivo.hidden ? [] : [elementosMensaje.motivo]),
             ...(elementosMensaje.cancelar.hidden ? [] : [elementosMensaje.cancelar]),
             elementosMensaje.aceptar
         ].filter(boton => !boton.disabled);
