@@ -5,7 +5,10 @@
   "main": "src/server-mongodb.js",
   "scripts": {
     "start": "node src/server-mongodb.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "check": "node --check src/server-mongodb.js && node --check src/mongodb.js && node --check src/configuracion-sesion.js && node --check src/requisitos-avance-ot.js && node --check public/js/app.js",
+    "test": "node --test tests/*.test.js",
+    "audit": "npm audit --audit-level=high",
+    "ci": "npm run check && npm test && npm run audit"
   },
   "keywords": [],
   "author": "",

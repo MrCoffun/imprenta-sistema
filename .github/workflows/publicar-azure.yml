@@ -1,26 +1,28 @@
-name: Publicar sistema de imprenta en Azure
+name: Integracion continua y despliegue en Azure
 
 on:
   push:
+    branches:
+      - migracion-mongodb
+  pull_request:
     branches:
       - migracion-mongodb
   workflow_dispatch:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
-  group: publicar-imprenta-azure
+  group: imprenta-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publicar:
-    # La identidad de Azure solo autoriza esta rama.
-    if: github.ref == 'refs/heads/migracion-mongodb'
+  integracion-continua:
+    name: Integracion continua (CI)
     runs-on: ubuntu-latest
+
     steps:
-      - name: Obtener el código
+      - name: Obtener el codigo
         uses: actions/checkout@v4
 
       - name: Preparar Node.js
@@ -29,14 +31,35 @@ jobs:
           node-version: '22'
           cache: npm
 
-      - name: Instalar dependencias y comprobar el avance de órdenes
-        run: |
-          npm ci
-          node --check src/server-mongodb.js
-          node --test tests/requisitos-avance-ot.test.js
+      - name: Instalar dependencias
+        run: npm ci
 
-      # Incluir solo archivos registrados en Git, sin .env ni node_modules.
-      - name: Preparar archivos de publicación
+      - name: Validar sintaxis del codigo
+        run: npm run check
+
+      - name: Ejecutar pruebas automatizadas
+        run: npm test
+
+      - name: Auditar vulnerabilidades
+        run: npm run audit
+
+  publicar:
+    name: Despliegue continuo (CD)
+    needs: integracion-continua
+
+    if: github.ref == 'refs/heads/migracion-mongodb' && github.event_name != 'pull_request'
+
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Obtener el codigo validado
+        uses: actions/checkout@v4
+
+      - name: Preparar archivos de publicacion
         run: git archive --format=zip -o "$RUNNER_TEMP/imprenta.zip" HEAD
 
       - name: Conectar con Azure
