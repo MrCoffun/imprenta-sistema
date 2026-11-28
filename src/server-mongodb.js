@@ -17,7 +17,7 @@ const { limiteArchivoOT, rolesLecturaArchivosOT, validarArchivoOT, validarDatosD
 const mongoose = require('mongoose');
 const crearConfiguracionSesion = require('./configuracion-sesion');
 const { comprobarRequisitosAvance, validarMotivoDevolucion } = require('./requisitos-avance-ot');
-const { estadosOT, estadosHistorialOT, permiteCambiarEstadoOT } = require('./estados-ot');
+const { estadosOT, estadosHistorialOT, estadosActivosPorRol, permiteCambiarEstadoOT } = require('./estados-ot');
 const { randomBytes, timingSafeEqual } = require('node:crypto');
 const path = require('path');
 
@@ -2397,18 +2397,12 @@ app.get('/api/ordenes-trabajo',
         // FILTROS POR ROL
         // ========================================
 
-        if (rolUsuario === 'diseñador') {
-
-            condicionesOT.estado = estado
-                ? estado
-                : { $in: ['Pendiente', 'En Diseño'] };
-
-        } else if (rolUsuario === 'maquinista') {
-
-            condicionesOT.estado = estado
-                ? estado
-                : 'En Impresión';
-
+        const estadosActivos = estadosActivosPorRol.get(rolUsuario);
+        if (estadosActivos) {
+            if (estado && !estadosActivos.includes(estado)) {
+                return res.status(403).json({ error: 'El estado solicitado no está disponible para este rol.' });
+            }
+            condicionesOT.estado = estado || { $in: estadosActivos };
         } else {
 
             condicionesOT.estado = enHistorial
@@ -2865,7 +2859,7 @@ app.get('/api/ordenes-trabajo/:id/logs',
         const ot = await OrdenTrabajo.findOne({
             id_ot: idOT
         })
-        .select('id_ot codigo_ot id_cotizacion -_id')
+        .select('id_ot codigo_ot id_cotizacion estado -_id')
         .lean();
 
         if (!ot) {
@@ -2874,7 +2868,7 @@ app.get('/api/ordenes-trabajo/:id/logs',
             });
         }
 
-        if (!await puedeConsultarHistorialOT(req.session.user, ot, Cotizacion)) {
+        if (!await puedeConsultarHistorialOT(req.session.user, ot, { Cotizacion, LogOT })) {
             return res.status(403).json({ error: 'No tienes permiso para consultar el historial de esta OT.' });
         }
 

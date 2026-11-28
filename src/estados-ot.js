@@ -15,6 +15,10 @@ const transicionesOT = {
 
 const estadosOT = Object.keys(transicionesOT);
 const estadosHistorialOT = ['Finalizada', 'Finalizada conforme', 'Entregada'];
+const estadosActivosPorRol = new Map([
+    ['diseñador', ['Pendiente', 'En Diseño']],
+    ['maquinista', ['En Impresión']]
+]);
 
 function permiteCambiarEstadoOT(rol, estadoActual, estadoNuevo) {
     const origen = estadoActual === 'Finalizada conforme' ? 'Finalizada' : estadoActual;
@@ -22,4 +26,4 @@ function permiteCambiarEstadoOT(rol, estadoActual, estadoNuevo) {
     return Array.isArray(roles) && roles.includes(rol);
 }
 
-module.exports = { estadosOT, estadosHistorialOT, permiteCambiarEstadoOT };
+module.exports = { estadosOT, estadosHistorialOT, estadosActivosPorRol, permiteCambiarEstadoOT };
