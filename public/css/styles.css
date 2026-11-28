@@ -404,6 +404,18 @@ button {
     overflow-x: auto;
 }
 
+.form-rol-usuario {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.form-rol-usuario select {
+    max-width: 100%;
+    width: auto;
+}
+
 table {
     width: 100%;
     border-collapse: collapse;
