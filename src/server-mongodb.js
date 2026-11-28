@@ -711,6 +711,31 @@ function fechaHoraLima() {
     return `${valores.year}-${valores.month}-${valores.day} ${valores.hour}:${valores.minute}:${valores.second}`;
 }
 
+function ordenarPorFechaReciente(fecha, identificador) {
+    // Los registros nuevos usan hora de Lima y los importados pueden incluir su propia zona.
+    return [
+        {
+            $set: {
+                fecha_orden: {
+                    $let: {
+                        vars: { fecha },
+                        in: {
+                            $dateFromString: {
+                                dateString: '$$fecha',
+                                timezone: 'America/Lima',
+                                onError: { $convert: { input: '$$fecha', to: 'date', onError: null } },
+                                onNull: null
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        { $sort: { fecha_orden: -1, [identificador]: -1 } },
+        { $unset: 'fecha_orden' }
+    ];
+}
+
 /*
 ========================================
 GET - LISTAR COTIZACIONES
@@ -750,11 +775,11 @@ app.get('/api/cotizaciones',
 
             const offset = (paginaFinal - 1) * porPagina;
 
-            const registros = await Cotizacion.find()
-                .sort({ id_cotizacion: -1 })
-                .skip(offset)
-                .limit(porPagina)
-                .lean();
+            const registros = await Cotizacion.aggregate([
+                ...ordenarPorFechaReciente('$fecha_creacion', 'id_cotizacion'),
+                { $skip: offset },
+                { $limit: porPagina }
+            ]);
 
             const idsClientes = [
                 ...new Set(registros.map(c => c.id_cliente))
@@ -863,7 +888,7 @@ app.get('/api/ordenes-trabajo/:id/disenos',
                 }
             },
             { $unwind: '$ot' },
-            { $sort: { id_diseño: -1 } },
+            ...ordenarPorFechaReciente('$fecha_carga', 'id_diseño'),
             {
                 $project: {
                     _id: 0,
@@ -1269,18 +1294,10 @@ app.get('/api/cotizaciones/diseno-pendientes',
     permitirRoles('diseñador'),
     async (req, res) => {
         try {
-            const cotizaciones = await Cotizacion.find({
-                estado: 'Pendiente',
-                'costos.estado_evaluacion': 'Pendiente'
-            })
-            .select(
-                'id_cotizacion codigo_cotizacion tipo_producto ' +
-                'tamaño material cantidad fecha_requerida ' +
-                'hora_requerida costos -_id'
-            )
-            // Mostrar primero las cotizaciones registradas más recientemente.
-            .sort({ id_cotizacion: -1 })
-            .lean();
+            const cotizaciones = await Cotizacion.aggregate([
+                { $match: { estado: 'Pendiente', 'costos.estado_evaluacion': 'Pendiente' } },
+                ...ordenarPorFechaReciente('$fecha_creacion', 'id_cotizacion')
+            ]);
 
             const resultado = cotizaciones.map(c => ({
                 id_cotizacion: c.id_cotizacion,
@@ -1343,7 +1360,7 @@ app.get('/api/cotizaciones/pendientes-disenador',
                     }
                 },
                 { $unwind: '$clienteDatos' },
-                { $sort: { id_cotizacion: -1 } },
+                ...ordenarPorFechaReciente('$fecha_creacion', 'id_cotizacion'),
                 {
                     $project: {
                         _id: 0,
@@ -1405,7 +1422,7 @@ app.get('/api/cotizaciones/pendientes-aprobacion',
                 },
                 { $unwind: '$clienteDatos' },
                 // Mostrar primero las propuestas enviadas o actualizadas recientemente.
-                { $sort: { 'costos.fecha_actualizacion': -1, id_cotizacion: -1 } },
+                ...ordenarPorFechaReciente({ $ifNull: ['$costos.fecha_actualizacion', '$fecha_creacion'] }, 'id_cotizacion'),
                 {
                     $project: {
                         _id: 0,
@@ -2445,12 +2462,7 @@ app.get('/api/ordenes-trabajo',
             {
                 $unwind: '$clienteDatos'
             },
-            {
-                // Mostrar primero las órdenes más recientes en cada lista.
-                $sort: enHistorial || estadosHistorialOT.includes(estado)
-                    ? { fecha_actualizacion: -1, id_ot: -1 }
-                    : { id_ot: -1 }
-            },
+            ...ordenarPorFechaReciente({ $ifNull: ['$fecha_actualizacion', '$fecha_creacion'] }, 'id_ot'),
             {
                 $facet: {
                     registros: [
@@ -3082,12 +3094,11 @@ app.get('/api/ordenes-trabajo/:id/impresiones',
                 });
             }
 
-            const impresiones = await Impresion.find({
-                id_ot: idOT
-            })
-            .select('-_id -__v')
-            .sort({ id_impresion: -1 })
-            .lean();
+            const impresiones = await Impresion.aggregate([
+                { $match: { id_ot: idOT } },
+                ...ordenarPorFechaReciente('$fecha_impresion', 'id_impresion'),
+                { $project: { _id: 0, __v: 0 } }
+            ]);
 
             res.json({
                 orden_trabajo: ot,
