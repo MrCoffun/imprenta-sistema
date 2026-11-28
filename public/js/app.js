@@ -3943,7 +3943,7 @@ async function rechazarCotizacion(id) {
 // CONFIGURAR DETALLE DE OT SEGÚN ROL Y ESTADO
 // ==========================================
 
-const rolesHistorialOT = ['administrador', 'cotizador'];
+const rolesHistorialOT = ['administrador', 'cotizador', 'diseñador', 'maquinista'];
 
 function configurarDetalleOTPorRol(ot) {
 
