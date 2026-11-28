@@ -21,6 +21,7 @@ const disenoSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    id_archivo: Number,
     fecha_carga: {
         type: String,
         required: true
