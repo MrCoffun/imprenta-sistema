@@ -3973,6 +3973,10 @@ async function verOT(id) {
     const sigueAbierta = () => carga === cargaDetalleOT && sessionStorage.getItem('vistaActual') === 'detalle-ot';
     otActualId = null;
     document.getElementById('accionesEstadoOT').textContent = 'Cargando datos de la orden…';
+    document.getElementById('listaArchivosOT').textContent = 'Cargando archivos…';
+    document.getElementById('formAdjuntoOT').hidden = true;
+    document.getElementById('formAdjuntoOT').reset();
+    document.getElementById('formDisenoOT').reset();
     for (const panel of ['detalleOTDiseno', 'detalleOTImpresion', 'tablaLogsOT']) {
         document.getElementById(panel)?.replaceChildren();
     }
@@ -4088,40 +4092,23 @@ async function verOT(id) {
 
 
         if (disenos.length === 0) {
-
-            contenedorDiseno.innerHTML =
-                '<p>No hay diseños registrados para esta OT.</p>';
-
+            contenedorDiseno.textContent = 'No hay diseños registrados para esta OT.';
         } else {
-
-            contenedorDiseno.innerHTML =
-                disenos.map(diseno => `
-
-                    <div class="status-item">
-
-                        <div>
-
-                            <strong>
-                                ${diseno.nombre_diseño}
-                            </strong>
-
-                            <small>
-                                Archivo:
-                                ${diseno.archivo_diseño}
-                            </small>
-
-                            <small>
-                                ${diseno.descripcion || 'Sin descripción'}
-                            </small>
-
-                        </div>
-
-                    </div>
-
-                `).join('');
-
+            contenedorDiseno.replaceChildren(...disenos.map(diseno => {
+                const fila = document.createElement('div');
+                fila.className = 'status-item';
+                const detalle = document.createElement('div');
+                const nombre = document.createElement('strong');
+                const archivo = document.createElement('small');
+                const descripcion = document.createElement('small');
+                nombre.textContent = diseno.nombre_diseño;
+                archivo.textContent = 'Archivo: ' + diseno.archivo_diseño;
+                descripcion.textContent = diseno.descripcion || 'Sin descripción';
+                detalle.append(nombre, archivo, descripcion);
+                fila.appendChild(detalle);
+                return fila;
+            }));
         }
-
 
         // ==========================================
         // CARGAR IMPRESIONES
@@ -4254,6 +4241,7 @@ if (rolUsuario === 'administrador') {
 
 otActualId = ot.id_ot;
 mostrarAccionesEstado(ot);
+await cargarArchivosOT(ot, sigueAbierta);
 
 } catch (error) {
     if (!sigueAbierta()) return;
@@ -4639,87 +4627,96 @@ async function cambiarEstadoOT(idOT, nuevoEstado, esDevolucion = false) {
 // REGISTRAR DISEÑO EN UNA OT
 // ==========================================
 
-document
-    .getElementById('formDisenoOT')
-    ?.addEventListener('submit', async function (event) {
-
-        console.log('🟣 SUBMIT DISEÑO EJECUTADO');
-
-        event.preventDefault();
-
-        try {
-
-    if (!otActualId) {
-        throw new Error(
-            'No hay una OT abierta'
-        );
+async function cargarArchivosOT(ot, sigueAbierta) {
+    const lista = document.getElementById('listaArchivosOT');
+    const form = document.getElementById('formAdjuntoOT');
+    if (!['cotizador', 'diseñador', 'maquinista'].includes(rolUsuario)) {
+        lista.textContent = 'Este rol no tiene permiso para gestionar ni descargar los archivos de la OT.';
+        return;
     }
 
-            const nombreDiseno =
-                document.getElementById('nombreDiseno').value.trim();
+    try {
+        const respuesta = await fetchSeguro('/api/ordenes-trabajo/' + ot.id_ot + '/archivos');
+        const datos = await respuesta.json();
+        if (!sigueAbierta()) return;
+        if (!respuesta.ok) throw new Error(datos.error || 'No se pudieron consultar los archivos.');
 
-            const archivoDiseno =
-                document.getElementById('archivoDiseno').value.trim();
-
-            const descripcionDiseno =
-                document.getElementById('descripcionDiseno').value.trim();
-
-            const respuesta =
-                await fetchSeguro(`/api/ordenes-trabajo/${otActualId}/diseno`,
-                    {
-                        method: 'POST',
-
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-
-                        body: JSON.stringify({
-                            nombre_diseño: nombreDiseno,
-                            descripcion: descripcionDiseno,
-                            archivo_diseño: archivoDiseno,
-                        })
-                    }
-                );
-
-            const datos =
-                await respuesta.json();
-
-            if (!respuesta.ok) {
-                throw new Error(
-                    datos.error ||
-                    'No se pudo registrar el diseño'
-                );
+        lista.replaceChildren();
+        for (const archivo of datos.archivos) {
+            const fila = document.createElement('div');
+            fila.className = 'status-item';
+            const info = document.createElement('div');
+            const nombre = document.createElement('strong');
+            nombre.textContent = archivo.nombre_archivo;
+            const meta = document.createElement('small');
+            const clase = archivo.categoria === 'diseno' ? 'Diseño final' : 'Referencia';
+            meta.textContent = archivo.disponible
+                ? [clase, new Intl.NumberFormat('es-PE').format(archivo.tamano_bytes) + ' bytes', archivo.fecha_carga].join(' · ')
+                : 'Referencia histórica sin archivo disponible.';
+            info.append(nombre, meta);
+            fila.appendChild(info);
+            if (archivo.disponible) {
+                const enlace = document.createElement('a');
+                enlace.className = 'secondary-button';
+                enlace.href = '/api/ordenes-trabajo/' + ot.id_ot + '/archivos/' + archivo.id_archivo;
+                enlace.download = archivo.nombre_archivo;
+                enlace.textContent = 'Descargar';
+                enlace.setAttribute('aria-label', 'Descargar ' + archivo.nombre_archivo);
+                fila.appendChild(enlace);
             }
-
-            mostrarNotificacion('Diseño registrado correctamente.', {
-                tipo: 'exito',
-                titulo: 'Diseño registrado'
-            });
-
-            // Limpiar formulario
-            document
-                .getElementById('formDisenoOT')
-                .reset();
-
-            // Recargar detalle completo
-            await verOT(otActualId);
-
-        } catch (error) {
-
-            console.error(
-                '❌ Error registrando diseño:',
-                error
-            );
-
-            mostrarNotificacion(error.message || 'No se pudo registrar el diseño.', {
-                tipo: 'error',
-                titulo: 'No se pudo registrar el diseño'
-            });
-
+            lista.appendChild(fila);
         }
+        if (!datos.archivos.length) lista.textContent = 'Esta OT aún no tiene archivos adjuntos.';
+        form.hidden = rolUsuario !== 'cotizador' || ['Finalizada', 'Finalizada conforme', 'Entregada'].includes(ot.estado);
+    } catch (error) {
+        if (sigueAbierta()) lista.textContent = error.message;
+    }
+}
 
+async function enviarArchivoOT(event, archivo, recurso, opciones = {}) {
+    event.preventDefault();
+    const id = otActualId;
+    if (!id || !archivo) return;
+    const carga = cargaDetalleOT;
+    const boton = event.submitter;
+    if (boton) boton.disabled = true;
+    try {
+        const respuesta = await fetchSeguro('/api/ordenes-trabajo/' + id + '/' + recurso, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/octet-stream',
+                'X-File-Name': encodeURIComponent(archivo.name),
+                ...opciones.cabeceras
+            },
+            body: archivo
+        });
+        const tipo = respuesta.headers.get('Content-Type') || '';
+        const datos = tipo.includes('application/json') ? await respuesta.json() : {};
+        if (!respuesta.ok) throw new Error(datos.error || 'No se pudo cargar el archivo.');
+        if (carga === cargaDetalleOT && sessionStorage.getItem('vistaActual') === 'detalle-ot') {
+            await verOT(id);
+        }
+        mostrarNotificacion(datos.mensaje || 'Archivo guardado.', { tipo: 'exito', titulo: opciones.titulo || 'Archivo adjuntado' });
+    } catch (error) {
+        mostrarNotificacion(error.message, { tipo: 'error', titulo: 'No se pudo cargar el archivo' });
+    } finally {
+        if (boton) boton.disabled = false;
+    }
+}
+
+document.getElementById('formAdjuntoOT').addEventListener('submit', event => {
+    return enviarArchivoOT(event, document.getElementById('archivoReferenciaOT').files[0], 'archivos');
+});
+
+document.getElementById('formDisenoOT').addEventListener('submit', event => {
+    return enviarArchivoOT(event, document.getElementById('archivoDiseno').files[0], 'diseno', {
+        titulo: 'Diseño registrado',
+        cabeceras: {
+            'X-Design-Name': encodeURIComponent(document.getElementById('nombreDiseno').value.trim()),
+            'X-Design-Description': encodeURIComponent(document.getElementById('descripcionDiseno').value.trim())
+        }
     });
-
+});
 
 // ==========================================
 // REGISTRAR IMPRESIÓN EN UNA OT

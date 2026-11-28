@@ -24,6 +24,10 @@ const archivoSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    categoria: { type: String, enum: ['referencia', 'diseno'] },
+    tipo_mime: String,
+    tamano_bytes: Number,
+    contenido: { type: Buffer, select: false },
     fecha_carga: {
         type: String,
         required: true
