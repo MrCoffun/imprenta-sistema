@@ -3887,6 +3887,8 @@ async function rechazarCotizacion(id) {
 // CONFIGURAR DETALLE DE OT SEGÚN ROL Y ESTADO
 // ==========================================
 
+const rolesHistorialOT = ['administrador', 'cotizador'];
+
 function configurarDetalleOTPorRol(ot) {
 
     const formularioDiseno =
@@ -3948,13 +3950,53 @@ function configurarDetalleOTPorRol(ot) {
     // ==========================================
 
     if (panelHistorial) {
+        panelHistorial.style.display = rolesHistorialOT.includes(rolUsuario) ? '' : 'none';
+    }
+}
 
-        if (rolUsuario === 'administrador') {
-            panelHistorial.style.display = '';
-        } else {
-            panelHistorial.style.display = 'none';
+async function cargarHistorialOT(ot, sigueAbierta) {
+    if (!rolesHistorialOT.includes(rolUsuario)) return;
+
+    const descripcion = document.getElementById('descripcionHistorialOT');
+    if (descripcion) descripcion.textContent = `Eventos registrados para la ${ot.codigo_ot}`;
+    const tabla = document.getElementById('tablaLogsOT');
+    const mostrarMensaje = mensaje => {
+        tabla.replaceChildren();
+        const celda = tabla.insertRow().insertCell();
+        celda.colSpan = 6;
+        celda.textContent = mensaje;
+    };
+
+    mostrarMensaje('Cargando historial…');
+    try {
+        const respuesta = await fetchSeguro(`/api/ordenes-trabajo/${ot.id_ot}/logs`);
+        if (!sigueAbierta()) return;
+        if (respuesta.status === 403) {
+            mostrarMensaje('No tienes permiso para consultar el historial de esta OT.');
+            return;
+        }
+        if (!respuesta.ok) throw new Error('Error al obtener el historial');
+
+        const { logs } = await respuesta.json();
+        if (!sigueAbierta()) return;
+        if (!logs.length) {
+            mostrarMensaje('No hay registros en el historial.');
+            return;
         }
 
+        tabla.replaceChildren(...logs.map(log => {
+            const fila = document.createElement('tr');
+            const columnas = [
+                log.fecha_hora || '', log.usuario || '', log.tipo_evento || '',
+                log.estado_anterior || '-', log.estado_nuevo || '-', log.detalle_evento || '-'
+            ];
+            for (const valor of columnas) {
+                fila.insertCell().textContent = valor;
+            }
+            return fila;
+        }));
+    } catch (error) {
+        if (sigueAbierta()) mostrarMensaje('No se pudo cargar el historial de la OT.');
     }
 }
 
@@ -4187,67 +4229,9 @@ async function verOT(id) {
 configurarDetalleOTPorRol(ot);
 
 
-// ==========================================
-// HISTORIAL / LOGS
-// Solo visible para Administrador
-// ==========================================
-
-const tablaLogs =
-    document.getElementById('tablaLogsOT');
-
-if (rolUsuario === 'administrador') {
-
-    const respuestaLogs =
-        await fetchSeguro(`/api/ordenes-trabajo/${id}/logs`);
-
-    if (!respuestaLogs.ok) {
-        throw new Error('Error al obtener historial');
-    }
-
-    const datosLogs =
-        await respuestaLogs.json();
-    if (!sigueAbierta()) return;
-
-    const logs =
-        datosLogs.logs || [];
-
-    if (!logs.length) {
-
-        tablaLogs.innerHTML = `
-            <tr>
-                <td colspan="6">
-                    No hay registros en el historial.
-                </td>
-            </tr>
-        `;
-
-    } else {
-
-        tablaLogs.replaceChildren(...logs.map(log => {
-            const fila = document.createElement('tr');
-            const columnas = [
-                log.fecha_hora || '', log.usuario || '', log.tipo_evento || '',
-                log.estado_anterior || '-', log.estado_nuevo || '-', log.detalle_evento || '-'
-            ];
-            for (const valor of columnas) {
-                fila.insertCell().textContent = valor;
-            }
-            return fila;
-        }));
-    }
-
-} else {
-
-    // El Cotizador, Diseñador y Maquinista
-    // no consultan ni visualizan los logs.
-    if (tablaLogs) {
-        tablaLogs.innerHTML = '';
-    }
-}
-
 otActualId = ot.id_ot;
 mostrarAccionesEstado(ot);
-await cargarArchivosOT(ot, sigueAbierta);
+await Promise.all([cargarArchivosOT(ot, sigueAbierta), cargarHistorialOT(ot, sigueAbierta)]);
 
 } catch (error) {
     if (!sigueAbierta()) return;
