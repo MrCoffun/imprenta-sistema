@@ -4106,6 +4106,12 @@ async function verOT(id) {
                 descripcion.textContent = diseno.descripcion || 'Sin descripción';
                 detalle.append(nombre, archivo, descripcion);
                 fila.appendChild(detalle);
+                if (diseno.id_archivo && ['cotizador', 'diseñador', 'maquinista'].includes(rolUsuario)) {
+                    const enlace = enlaceDescargaOT(id, diseno.id_archivo, diseno.archivo_diseño);
+                    enlace.textContent = 'Descargar diseño';
+                    enlace.setAttribute('aria-label', 'Descargar diseño ' + diseno.nombre_diseño);
+                    fila.appendChild(enlace);
+                }
                 return fila;
             }));
         }
@@ -4627,6 +4633,16 @@ async function cambiarEstadoOT(idOT, nuevoEstado, esDevolucion = false) {
 // REGISTRAR DISEÑO EN UNA OT
 // ==========================================
 
+function enlaceDescargaOT(idOT, idArchivo, nombre) {
+    const enlace = document.createElement('a');
+    enlace.className = 'secondary-button';
+    enlace.href = '/api/ordenes-trabajo/' + idOT + '/archivos/' + idArchivo;
+    enlace.download = nombre;
+    enlace.textContent = 'Descargar';
+    enlace.setAttribute('aria-label', 'Descargar ' + nombre);
+    return enlace;
+}
+
 async function cargarArchivosOT(ot, sigueAbierta) {
     const lista = document.getElementById('listaArchivosOT');
     const form = document.getElementById('formAdjuntoOT');
@@ -4656,13 +4672,7 @@ async function cargarArchivosOT(ot, sigueAbierta) {
             info.append(nombre, meta);
             fila.appendChild(info);
             if (archivo.disponible) {
-                const enlace = document.createElement('a');
-                enlace.className = 'secondary-button';
-                enlace.href = '/api/ordenes-trabajo/' + ot.id_ot + '/archivos/' + archivo.id_archivo;
-                enlace.download = archivo.nombre_archivo;
-                enlace.textContent = 'Descargar';
-                enlace.setAttribute('aria-label', 'Descargar ' + archivo.nombre_archivo);
-                fila.appendChild(enlace);
+                fila.appendChild(enlaceDescargaOT(ot.id_ot, archivo.id_archivo, archivo.nombre_archivo));
             }
             lista.appendChild(fila);
         }

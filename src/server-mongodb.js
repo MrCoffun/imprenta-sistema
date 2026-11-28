@@ -873,6 +873,7 @@ app.get('/api/ordenes-trabajo/:id/disenos',
                     nombre_diseño: 1,
                     descripcion: 1,
                     archivo_diseño: 1,
+                    id_archivo: 1,
                     fecha_carga: 1
                 }
             }
@@ -1002,16 +1003,12 @@ app.post('/api/ordenes-trabajo/:id/diseno',
 
     const idOT = Number(req.params.id);
 
-    let { nombre_diseño, descripcion, archivo_diseño } = req.body ?? {};
-    let adjunto;
-    if (req.is('application/octet-stream')) {
-        adjunto = validarArchivoOT(req.get('x-file-name'), req.body);
-        if (adjunto.error) return res.status(adjunto.estado).json({ error: adjunto.error });
-        const datos = validarDatosDisenoArchivo(req.get('x-design-name'), req.get('x-design-description'));
-        if (!datos) return res.status(400).json({ error: 'Revisa el nombre y la descripción del diseño.' });
-        ({ nombre: nombre_diseño, descripcion } = datos);
-        archivo_diseño = adjunto.nombre;
-    }
+    const adjunto = validarArchivoOT(req.get('x-file-name'), req.body);
+    if (adjunto.error) return res.status(adjunto.estado).json({ error: adjunto.error });
+    const datos = validarDatosDisenoArchivo(req.get('x-design-name'), req.get('x-design-description'));
+    if (!datos) return res.status(400).json({ error: 'Revisa el nombre y la descripción del diseño.' });
+    const { nombre: nombre_diseño, descripcion } = datos;
+    const archivo_diseño = adjunto.nombre;
 
     const id_usuario = req.session.user.id;
 
@@ -1023,12 +1020,6 @@ app.post('/api/ordenes-trabajo/:id/diseno',
         if (!ot) {
             return res.status(404).json({
                 error: 'Orden de trabajo no encontrada'
-            });
-        }
-
-        if (!nombre_diseño || !archivo_diseño) {
-            return res.status(400).json({
-                error: 'nombre_diseño y archivo_diseño son obligatorios'
             });
         }
 
@@ -1051,7 +1042,7 @@ app.post('/api/ordenes-trabajo/:id/diseno',
 
             if (!contadorDiseño) throw new Error('Contador de diseños no inicializado');
 
-            if (adjunto) await almacenarArchivoOT(ot, adjunto, 'diseno', id_usuario, session);
+            const id_archivo = await almacenarArchivoOT(ot, adjunto, 'diseno', id_usuario, session);
 
             const [diseño] = await Diseno.create([{
                 id_diseño: contadorDiseño.secuencia,
@@ -1059,17 +1050,16 @@ app.post('/api/ordenes-trabajo/:id/diseno',
                 nombre_diseño,
                 descripcion: descripcion || null,
                 archivo_diseño,
+                id_archivo,
                 fecha_carga: fechaHoraLima()
             }], { session });
 
             await registrarLog(idOT, id_usuario, 'DISEÑO_CARGADO', null, null, nombre_diseño + ' - ' + archivo_diseño, session);
             return diseño;
-        }, adjunto ? 'En Diseño' : undefined);
+        }, 'En Diseño');
 
         if (!nuevo) {
-            return res.status(409).json({ error: adjunto
-                ? 'El diseño final solo puede cargarse cuando la OT está En Diseño.'
-                : 'La orden ya está finalizada o entregada y no admite nuevos diseños.' });
+            return res.status(409).json({ error: 'El diseño final solo puede cargarse cuando la OT está En Diseño.' });
         }
 
         res.status(201).json({
@@ -1081,6 +1071,7 @@ app.post('/api/ordenes-trabajo/:id/diseno',
                 nombre_diseño: nuevo.nombre_diseño,
                 descripcion: nuevo.descripcion,
                 archivo_diseño: nuevo.archivo_diseño,
+                id_archivo: nuevo.id_archivo,
                 fecha_carga: nuevo.fecha_carga
             }
         });
