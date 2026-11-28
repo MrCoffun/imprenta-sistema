@@ -11,6 +11,7 @@ const OrdenTrabajo = require('./models/OrdenTrabajo');
 const Contador = require('./models/Contador');
 const Diseno = require('./models/Diseno');
 const Archivo = require('./models/Archivo');
+const { rolesHistorialOT, puedeConsultarHistorialOT } = require('./autorizacion-historial-ot');
 const { limiteArchivoOT, rolesLecturaArchivosOT, validarArchivoOT, validarDatosDisenoArchivo } = require('./archivos-ot');
 const mongoose = require('mongoose');
 const crearConfiguracionSesion = require('./configuracion-sesion');
@@ -2830,10 +2831,14 @@ GET - LOGS DE UNA ORDEN DE TRABAJO
 ========================================
 */
 app.get('/api/ordenes-trabajo/:id/logs',
-    permitirRoles('administrador'),
+    permitirRoles(...rolesHistorialOT),
     async (req, res) => {
 
-    const idOT = req.params.id;
+    const idOT = Number(req.params.id);
+    res.set('Cache-Control', 'private, no-store');
+    if (!Number.isSafeInteger(idOT) || idOT < 1) {
+        return res.status(400).json({ error: 'ID de orden de trabajo inválido' });
+    }
 
     console.log(`🔥 Consultando logs de OT ${idOT}`);
 
@@ -2841,9 +2846,9 @@ app.get('/api/ordenes-trabajo/:id/logs',
 
         // Verificar que la OT exista
         const ot = await OrdenTrabajo.findOne({
-            id_ot: Number(idOT)
+            id_ot: idOT
         })
-        .select('id_ot codigo_ot -_id')
+        .select('id_ot codigo_ot id_cotizacion -_id')
         .lean();
 
         if (!ot) {
@@ -2852,11 +2857,15 @@ app.get('/api/ordenes-trabajo/:id/logs',
             });
         }
 
+        if (!await puedeConsultarHistorialOT(req.session.user, ot, Cotizacion)) {
+            return res.status(403).json({ error: 'No tienes permiso para consultar el historial de esta OT.' });
+        }
+
         // Obtener únicamente los logs de esta OT
         const logs = await LogOT.aggregate([
             {
                 $match: {
-                    id_ot: Number(idOT)
+                    id_ot: idOT
                 }
             },
             {
@@ -2910,7 +2919,7 @@ app.get('/api/ordenes-trabajo/:id/logs',
         );
 
         res.json({
-            orden_trabajo: ot,
+            orden_trabajo: { id_ot: ot.id_ot, codigo_ot: ot.codigo_ot },
             logs: logs
         });
 
