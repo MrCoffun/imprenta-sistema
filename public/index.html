@@ -2212,6 +2212,23 @@
                     </section>
 
 
+                <section class="panel" id="panelArchivosOT" aria-labelledby="tituloArchivosOT">
+                    <div class="panel-header">
+                        <h3 id="tituloArchivosOT">Archivos de la OT</h3>
+                    </div>
+                    <div id="listaArchivosOT" aria-live="polite"></div>
+                    <form id="formAdjuntoOT" hidden>
+                        <hr>
+                        <div class="form-group">
+                            <label for="archivoReferenciaOT">Archivo de referencia</label>
+                            <input type="file" id="archivoReferenciaOT"
+                                accept=".jpg,.jpeg,.png,.pdf" aria-describedby="formatosAdjuntoOT" required>
+                            <small id="formatosAdjuntoOT">JPG, PNG o PDF. Máximo 8 MB por archivo.</small>
+                        </div>
+                        <button type="submit" class="primary-button">Adjuntar archivo</button>
+                    </form>
+                </section>
+
                 <!-- =========================
                             DISEÑO
                 ========================== -->
@@ -2253,6 +2270,7 @@
                                 <input
                                     type="text"
                                     id="nombreDiseno"
+                                    maxlength="255"
                                     placeholder="Ej. Diseño volante A4"
                                     required
                                 >
@@ -2266,11 +2284,13 @@
                                 </label>
 
                                 <input
-                                    type="text"
+                                    type="file"
                                     id="archivoDiseno"
-                                    placeholder="Ej. volante_a4.pdf"
+                                    accept=".jpg,.jpeg,.png,.pdf"
+                                    aria-describedby="formatosDisenoOT"
                                     required
                                 >
+                                <small id="formatosDisenoOT">JPG, PNG o PDF. Máximo 8 MB por archivo.</small>
 
                             </div>
 
@@ -2282,6 +2302,7 @@
 
                                 <textarea
                                     id="descripcionDiseno"
+                                    maxlength="500"
                                     placeholder="Descripción del diseño"
                                 ></textarea>
 

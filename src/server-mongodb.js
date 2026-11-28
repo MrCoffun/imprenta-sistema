@@ -10,6 +10,8 @@ const Cotizacion = require('./models/Cotizacion');
 const OrdenTrabajo = require('./models/OrdenTrabajo');
 const Contador = require('./models/Contador');
 const Diseno = require('./models/Diseno');
+const Archivo = require('./models/Archivo');
+const { limiteArchivoOT, rolesLecturaArchivosOT, validarArchivoOT, validarDatosDisenoArchivo } = require('./archivos-ot');
 const mongoose = require('mongoose');
 const crearConfiguracionSesion = require('./configuracion-sesion');
 const { comprobarRequisitosAvance, validarMotivoDevolucion } = require('./requisitos-avance-ot');
@@ -665,10 +667,11 @@ async function registrarLog(
 
 
 // Mantener inseparables la verificación del estado y el registro del trabajo.
-async function guardarTrabajoEnOT(idOT, guardar) {
+async function guardarTrabajoEnOT(idOT, guardar, estadoRequerido) {
+    const estadoDisponible = estadoRequerido ?? { $nin: estadosHistorialOT };
     return mongoose.connection.transaction(async session => {
         const orden = await OrdenTrabajo.updateOne(
-            { id_ot: idOT, estado: { $nin: estadosHistorialOT } },
+            { id_ot: idOT, estado: estadoDisponible },
             { $inc: { version_estado: 1 } },
             { session }
         );
@@ -890,24 +893,132 @@ app.get('/api/ordenes-trabajo/:id/disenos',
     }
 });
 
+const leerArchivoBinario = express.raw({ type: 'application/octet-stream', limit: limiteArchivoOT, inflate: false });
+
+function recibirArchivoOT(req, res, next) {
+    leerArchivoBinario(req, res, error => {
+        if (error?.status === 413) {
+            return res.status(413).json({ error: 'El archivo supera el tamaño máximo de 8 MB.' });
+        }
+        if (error) {
+            return res.status(error.status === 415 ? 415 : 400).json({ error: 'No se pudo recibir el archivo.' });
+        }
+        next();
+    });
+}
+
+async function almacenarArchivoOT(ot, archivo, categoria, idUsuario, session) {
+    // Los archivos importados pueden tener un identificador anterior al contador.
+    const ultimo = await Archivo.findOne().select('id_archivo').sort({ id_archivo: -1 }).session(session).lean();
+    await Contador.updateOne({ _id: 'archivo' }, { $max: { secuencia: ultimo?.id_archivo ?? 0 } }, { upsert: true, setDefaultsOnInsert: false, session });
+    const contador = await Contador.findOneAndUpdate(
+        { _id: 'archivo' }, { $inc: { secuencia: 1 } }, { returnDocument: 'after', session }
+    );
+    const id_archivo = contador.secuencia;
+    await Archivo.create([{
+        id_archivo,
+        id_ot: ot.id_ot,
+        id_cotizacion: ot.id_cotizacion,
+        id_usuario: idUsuario,
+        nombre_archivo: archivo.nombre,
+        categoria,
+        ruta: '/api/ordenes-trabajo/' + ot.id_ot + '/archivos/' + id_archivo,
+        tipo_mime: archivo.mime,
+        tamano_bytes: archivo.contenido.length,
+        contenido: archivo.contenido,
+        fecha_carga: fechaHoraLima()
+    }], { session });
+    return id_archivo;
+}
+
+app.post('/api/ordenes-trabajo/:id/archivos', permitirRoles('cotizador'), recibirArchivoOT, async (req, res) => {
+    const idOT = Number(req.params.id);
+    if (!Number.isSafeInteger(idOT) || idOT <= 0) return res.status(404).json({ error: 'Orden de trabajo no encontrada' });
+    const archivo = validarArchivoOT(req.get('x-file-name'), req.body);
+    if (archivo.error) return res.status(archivo.estado).json({ error: archivo.error });
+
+    try {
+        const ot = await OrdenTrabajo.findOne({ id_ot: idOT }).select('id_ot id_cotizacion').lean();
+        if (!ot) return res.status(404).json({ error: 'Orden de trabajo no encontrada' });
+        const idUsuario = req.session.user.id;
+        const idArchivo = await guardarTrabajoEnOT(idOT, async session => {
+            const id = await almacenarArchivoOT(ot, archivo, 'referencia', idUsuario, session);
+            await registrarLog(idOT, idUsuario, 'ARCHIVO_ADJUNTADO', null, null, archivo.nombre, session);
+            return id;
+        });
+        if (idArchivo === null) {
+            return res.status(409).json({ error: 'La orden ya está finalizada o entregada y no admite nuevos adjuntos.' });
+        }
+        res.status(201).json({ mensaje: 'Archivo adjuntado', id_archivo: idArchivo });
+    } catch (error) {
+        console.error('Error al adjuntar archivo a la OT:', error.message);
+        res.status(500).json({ error: 'No se pudo adjuntar el archivo' });
+    }
+});
+
+app.get('/api/ordenes-trabajo/:id/archivos', permitirRoles(...rolesLecturaArchivosOT), async (req, res) => {
+    const idOT = Number(req.params.id);
+    if (!Number.isSafeInteger(idOT) || idOT <= 0) return res.status(404).json({ error: 'Orden de trabajo no encontrada' });
+    try {
+        const ot = await OrdenTrabajo.findOne({ id_ot: idOT }).select('id_cotizacion -_id').lean();
+        if (!ot) return res.status(404).json({ error: 'Orden de trabajo no encontrada' });
+        const registros = await Archivo.find({ id_ot: idOT, id_cotizacion: ot.id_cotizacion })
+            .select('id_archivo nombre_archivo categoria fecha_carga tamano_bytes -_id')
+            .sort({ id_archivo: -1 }).lean();
+        const archivos = registros.map(archivo => ({ ...archivo, disponible: archivo.tamano_bytes > 0 }));
+        res.set('Cache-Control', 'private, no-store').json({ archivos });
+    } catch (error) {
+        console.error('Error al listar archivos de la OT:', error.message);
+        res.status(500).json({ error: 'No se pudieron consultar los archivos' });
+    }
+});
+
+app.get('/api/ordenes-trabajo/:id/archivos/:idArchivo', permitirRoles(...rolesLecturaArchivosOT), async (req, res) => {
+    const idOT = Number(req.params.id);
+    const idArchivo = Number(req.params.idArchivo);
+    if (![idOT, idArchivo].every(id => Number.isSafeInteger(id) && id > 0)) {
+        return res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+    try {
+        const ot = await OrdenTrabajo.findOne({ id_ot: idOT }).select('id_cotizacion -_id').lean();
+        if (!ot) return res.status(404).json({ error: 'Archivo no encontrado' });
+        const archivo = await Archivo.findOne({ id_archivo: idArchivo, id_ot: idOT, id_cotizacion: ot.id_cotizacion })
+            .select('nombre_archivo tipo_mime +contenido');
+        if (!archivo?.contenido?.length || !archivo.tipo_mime) {
+            return res.status(404).json({ error: 'El contenido de este archivo no está disponible en la orden.' });
+        }
+        res.attachment(archivo.nombre_archivo);
+        res.set({ 'Cache-Control': 'private, no-store', 'Content-Type': archivo.tipo_mime });
+        res.send(Buffer.from(archivo.contenido));
+    } catch (error) {
+        console.error('Error al descargar archivo de la OT:', error.message);
+        res.status(500).json({ error: 'No se pudo descargar el archivo' });
+    }
+});
+
 app.post('/api/ordenes-trabajo/:id/diseno',
-    permitirRoles('diseñador'),
+    permitirRoles('diseñador'), recibirArchivoOT,
     async (req, res) => {
 
     const idOT = Number(req.params.id);
 
-    const {
-        nombre_diseño,
-        descripcion,
-        archivo_diseño
-    } = req.body;
+    let { nombre_diseño, descripcion, archivo_diseño } = req.body ?? {};
+    let adjunto;
+    if (req.is('application/octet-stream')) {
+        adjunto = validarArchivoOT(req.get('x-file-name'), req.body);
+        if (adjunto.error) return res.status(adjunto.estado).json({ error: adjunto.error });
+        const datos = validarDatosDisenoArchivo(req.get('x-design-name'), req.get('x-design-description'));
+        if (!datos) return res.status(400).json({ error: 'Revisa el nombre y la descripción del diseño.' });
+        ({ nombre: nombre_diseño, descripcion } = datos);
+        archivo_diseño = adjunto.nombre;
+    }
 
     const id_usuario = req.session.user.id;
 
     try {
         const ot = await OrdenTrabajo.findOne({
             id_ot: idOT
-        }).select('id_ot codigo_ot estado -_id').lean();
+        }).select('id_ot id_cotizacion codigo_ot estado -_id').lean();
 
         if (!ot) {
             return res.status(404).json({
@@ -940,6 +1051,8 @@ app.post('/api/ordenes-trabajo/:id/diseno',
 
             if (!contadorDiseño) throw new Error('Contador de diseños no inicializado');
 
+            if (adjunto) await almacenarArchivoOT(ot, adjunto, 'diseno', id_usuario, session);
+
             const [diseño] = await Diseno.create([{
                 id_diseño: contadorDiseño.secuencia,
                 id_ot: idOT,
@@ -951,10 +1064,12 @@ app.post('/api/ordenes-trabajo/:id/diseno',
 
             await registrarLog(idOT, id_usuario, 'DISEÑO_CARGADO', null, null, nombre_diseño + ' - ' + archivo_diseño, session);
             return diseño;
-        });
+        }, adjunto ? 'En Diseño' : undefined);
 
         if (!nuevo) {
-            return res.status(409).json({ error: 'La orden ya está finalizada o entregada y no admite nuevos diseños.' });
+            return res.status(409).json({ error: adjunto
+                ? 'El diseño final solo puede cargarse cuando la OT está En Diseño.'
+                : 'La orden ya está finalizada o entregada y no admite nuevos diseños.' });
         }
 
         res.status(201).json({
