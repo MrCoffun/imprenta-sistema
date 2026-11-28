@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const session = require('express-session');
 const conectarMongoDB = require('./mongodb');
 const Usuario = require('./models/Usuario');
+const { normalizarRolOperativo, cambiarRolOperativo } = require('./roles-usuarios');
 const Cliente = require('./models/Cliente');
 const Tarifa = require('./models/Tarifa');
 const Cotizacion = require('./models/Cotizacion');
@@ -407,11 +408,10 @@ app.post('/api/usuarios', permitirRoles('administrador'), async (req, res) => {
         const apellidos = datos.apellidos.trim();
         const nombreUsuario = normalizarNombreUsuario(datos.usuario);
         const contraseña = datos.contraseña;
-        const rol = datos.rol.trim().toLowerCase();
-        const rolesPermitidos = ['cotizador', 'diseñador', 'maquinista'];
+        const rol = normalizarRolOperativo(datos.rol);
 
         if (!nombres || nombres.length > 100 || !apellidos || apellidos.length > 100 ||
-            !nombreUsuario || nombreUsuario.length > 50 || !rolesPermitidos.includes(rol)) {
+            !nombreUsuario || nombreUsuario.length > 50 || !rol) {
             return res.status(400).json({ error: 'Revisa los datos y selecciona un rol permitido' });
         }
         if (contraseña.length < 8 || Buffer.byteLength(contraseña, 'utf8') > 72) {
@@ -453,6 +453,23 @@ app.post('/api/usuarios', permitirRoles('administrador'), async (req, res) => {
         }
         console.error('❌ Error creando usuario:', error);
         res.status(500).json({ error: 'No se pudo crear la cuenta' });
+    }
+});
+
+app.patch('/api/usuarios/:id/rol', permitirRoles('administrador'), async (req, res) => {
+    const idUsuario = Number(req.params.id);
+    const rolAnterior = normalizarRolOperativo(req.body?.rolAnterior);
+    const rol = normalizarRolOperativo(req.body?.rol);
+    if (!/^[1-9]\d*$/.test(req.params.id) || !Number.isSafeInteger(idUsuario) || !rolAnterior || !rol) {
+        return res.status(400).json({ error: 'Indica una cuenta y roles operativos válidos.' });
+    }
+
+    try {
+        const { estado, ...resultado } = await cambiarRolOperativo(Usuario, idUsuario, rolAnterior, rol);
+        res.status(estado).json(resultado);
+    } catch (error) {
+        console.error('Error cambiando el rol de la cuenta:', error.message);
+        res.status(500).json({ error: 'No se pudo cambiar el rol de la cuenta.' });
     }
 });
 

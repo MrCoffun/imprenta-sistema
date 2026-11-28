@@ -211,7 +211,37 @@ const vistaUsuarios = document.getElementById('view-usuarios');
 const formNuevoUsuario = document.getElementById('formNuevoUsuario');
 const tablaUsuarios = document.getElementById('tablaUsuarios');
 const btnGuardarUsuario = document.getElementById('btnGuardarUsuario');
+const selectorRolUsuario = document.getElementById('nuevoUsuarioRol');
 let usuarioActualId = null;
+
+function mostrarRolUsuario(celda, usuario) {
+    const selector = selectorRolUsuario.cloneNode(true);
+    selector.removeAttribute('id');
+    selector.remove(0);
+    const rolActual = usuario.rol.toLowerCase();
+    selector.value = rolActual;
+    if (!selector.value) {
+        celda.textContent = usuario.rol;
+        return;
+    }
+
+    selector.name = 'rol';
+    selector.setAttribute('aria-label', `Rol de ${usuario.usuario}`);
+    const formulario = document.createElement('form');
+    formulario.className = 'form-rol-usuario';
+    formulario.dataset.id = usuario.id_usuario;
+    formulario.dataset.rolAnterior = rolActual;
+    const guardar = document.createElement('button');
+    guardar.type = 'submit';
+    guardar.className = 'primary-button';
+    guardar.textContent = 'Guardar rol';
+    guardar.hidden = true;
+    selector.addEventListener('change', () => {
+        guardar.hidden = selector.value === rolActual;
+    });
+    formulario.append(selector, guardar);
+    celda.append(formulario);
+}
 
 // Consultar y mostrar únicamente los datos de cuenta permitidos por el servidor.
 async function cargarUsuarios() {
@@ -242,16 +272,10 @@ async function cargarUsuarios() {
             const cuentaActiva = usuario.estado === true;
             const fila = document.createElement('tr');
 
-            [
-                `${usuario.nombres} ${usuario.apellidos}`,
-                usuario.usuario,
-                usuario.rol,
-                cuentaActiva ? 'Activa' : 'Desactivada'
-            ].forEach(texto => {
-                const celda = document.createElement('td');
-                celda.textContent = texto;
-                fila.appendChild(celda);
-            });
+            fila.insertCell().textContent = `${usuario.nombres} ${usuario.apellidos}`;
+            fila.insertCell().textContent = usuario.usuario;
+            mostrarRolUsuario(fila.insertCell(), usuario);
+            fila.insertCell().textContent = cuentaActiva ? 'Activa' : 'Desactivada';
 
             const celdaAccion = document.createElement('td');
             const boton = document.createElement('button');
@@ -313,6 +337,38 @@ formNuevoUsuario?.addEventListener('submit', async evento => {
         });
     } finally {
         btnGuardarUsuario.disabled = false;
+    }
+});
+
+tablaUsuarios?.addEventListener('submit', async evento => {
+    evento.preventDefault();
+    const formulario = evento.target;
+    const boton = evento.submitter;
+    const { id, rolAnterior } = formulario.dataset;
+    const rol = formulario.elements.rol.value;
+    if (!boton || boton.disabled || rol === rolAnterior) return;
+
+    boton.disabled = true;
+    formulario.elements.rol.disabled = true;
+    try {
+        const respuesta = await fetchSeguro(`/api/usuarios/${encodeURIComponent(id)}/rol`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rolAnterior, rol })
+        });
+        const datos = await respuesta.json();
+        if (respuesta.status === 401) {
+            mostrarLogin();
+            return;
+        }
+        if (respuesta.status === 409 || respuesta.ok) await cargarUsuarios();
+        if (!respuesta.ok) throw new Error(datos.error || 'No se pudo cambiar el rol.');
+        mostrarNotificacion(datos.mensaje, { tipo: 'exito', titulo: 'Rol actualizado' });
+    } catch (error) {
+        mostrarNotificacion(error.message, { tipo: 'error', titulo: 'No se pudo cambiar el rol' });
+    } finally {
+        boton.disabled = false;
+        formulario.elements.rol.disabled = false;
     }
 });
 
